@@ -85,7 +85,7 @@ def run_popup_test_suite(root: ctk.CTk, visual: bool = False) -> None:
 
     # 8. Dynamic reconfiguration of action buttons
     step()
-    popup.configure(buttons=[{"label": "Confirm", "value": "confirmed", "role": "primary"}, {"label": "Abort", "value": "aborted", "role": "cancel"}])
+    popup.configure(buttons=[{"text": "Confirm", "value": "confirmed", "role": "primary"}, {"text": "Abort", "value": "aborted", "role": "cancel"}])
     root.update()
     assert len(popup._action_buttons) == 2, f"[8/10 Failed] Expected 2 action buttons, got {len(popup._action_buttons)}"
     print("[8/10] Dynamic button reconfiguration via .configure(buttons=...): PASSED")
@@ -110,8 +110,31 @@ def run_popup_test_suite(root: ctk.CTk, visual: bool = False) -> None:
     root.update()
     cb_popup._on_cancel()
     root.update()
-    assert callback_result == [cb_popup.cget("cancel_button")], f"[10/10 Failed] Callback received {callback_result}"
-    print("[10/10] Non-blocking callback and cancel protocol: PASSED")
+    assert callback_result == [cb_popup.cget("cancel_button")], f"[10/11 Failed] Callback received {callback_result}"
+    print("[10/11] Non-blocking callback and cancel protocol: PASSED")
+
+    # 11. Presets return values use standardized lowercase tokens
+    step()
+    expected_presets = {
+        "info": {"buttons": [("OK", "ok")], "default": "ok", "cancel": "ok"},
+        "warning": {"buttons": [("OK", "ok"), ("Cancel", "cancel")], "default": "ok", "cancel": "cancel"},
+        "error": {"buttons": [("OK", "ok")], "default": "ok", "cancel": "ok"},
+        "question": {"buttons": [("Yes", "yes"), ("No", "no")], "default": "yes", "cancel": "no"},
+        "success": {"buttons": [("OK", "ok")], "default": "ok", "cancel": "ok"},
+    }
+    for preset_name, spec in expected_presets.items():
+        preset_cfg = CTkPopup.PRESETS[preset_name]
+        actual_buttons = [(b["text"], b["value"]) for b in preset_cfg["buttons"]]
+        assert actual_buttons == spec["buttons"], (
+            f"[11/11 Failed] {preset_name} buttons expected {spec['buttons']}, got {actual_buttons}"
+        )
+        assert preset_cfg["default_button"] == spec["default"], (
+            f"[11/11 Failed] {preset_name} default_button expected {spec['default']}, got {preset_cfg['default_button']}"
+        )
+        assert preset_cfg["cancel_button"] == spec["cancel"], (
+            f"[11/11 Failed] {preset_name} cancel_button expected {spec['cancel']}, got {preset_cfg['cancel_button']}"
+        )
+    print("[11/11] Standardized lowercase preset return tokens & defaults: PASSED")
 
 
 def run_headless_tests() -> None:
@@ -125,8 +148,9 @@ def run_headless_tests() -> None:
     print("Running automated sanity tests for CTkPopup (headless)...")
     run_popup_test_suite(root, visual=False)
     root.destroy()
-    print("All automated checks (10/10) passed successfully!")
+    print("All automated checks (11/11) passed successfully!")
 
 
 if __name__ == "__main__":
     run_headless_tests()
+

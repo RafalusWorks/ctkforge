@@ -11,9 +11,9 @@ CTkPopup.PRESETS["my_custom_preset"] = {
     "title": "Unsaved Changes",
     "icon": "images/custom_star.png",
     "buttons": [
-        {"label": "Save & Exit", "value": "save", "role": "primary"},
-        {"label": "Discard", "value": "discard", "role": "destructive"},
-        {"label": "Keep Editing", "value": "cancel", "role": "cancel"},
+        {"text": "Save & Exit", "value": "save", "role": "primary"},
+        {"text": "Discard", "value": "discard", "role": "destructive"},
+        {"text": "Keep Editing", "value": "cancel", "role": "cancel"},
     ],
     "default_button": "save",
     "cancel_button": "cancel",

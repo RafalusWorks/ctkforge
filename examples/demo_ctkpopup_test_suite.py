@@ -250,15 +250,15 @@ class DemoApp(ctk.CTk):
         popup = CTkPopup(
             master=self,
             title="Delete Database Record",
-            message="Are you sure you want to permanently delete this customer record? This operation cannot be undone.",
+            text="Are you sure you want to permanently delete this customer record? This operation cannot be undone.",
             icon="warning",
             buttons=[
                 {
-                    "label": "Delete Permanently",
+                    "text": "Delete Permanently",
                     "value": "deleted",
                     "role": "destructive",
                 },
-                {"label": "Cancel", "value": "cancelled", "role": "cancel"},
+                {"text": "Cancel", "value": "cancelled", "role": "cancel"},
             ],
             cancel_button="cancelled",
         )
@@ -269,12 +269,12 @@ class DemoApp(ctk.CTk):
         popup = CTkPopup(
             master=self,
             title="File Already Exists",
-            message="A file named 'report_october.docx' already exists in this folder. What would you like to do?",
+            text="A file named 'report_october.docx' already exists in this folder. What would you like to do?",
             icon="warning",
             buttons=[
-                {"label": "Keep Both", "value": "rename", "role": "primary"},
-                {"label": "Overwrite", "value": "overwrite", "role": "destructive"},
-                {"label": "Cancel", "value": False, "role": "cancel"},
+                {"text": "Keep Both", "value": "rename", "role": "primary"},
+                {"text": "Overwrite", "value": "overwrite", "role": "destructive"},
+                {"text": "Cancel", "value": False, "role": "cancel"},
             ],
             cancel_button=False,
         )
@@ -300,7 +300,7 @@ class DemoApp(ctk.CTk):
             text=SAMPLE_TRACEBACK,
             preset="error",
             buttons=[
-                {"label": "Copy & Dismiss", "value": "dismiss", "role": "primary"},
+                {"text": "Copy & Dismiss", "value": "dismiss", "role": "primary"},
             ],
             width=520,
         )

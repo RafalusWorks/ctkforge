@@ -51,49 +51,48 @@ ROLE_COLORS: dict[str, dict[str, Any]] = {
 # Exposes only title, icon, buttons, and keyboard action defaults.
 # Button layout follows Windows Standard (Microsoft Guidelines):
 # Primary action comes first (left), and Cancel is on the far right:
-#   [ Proceed ]  [ Cancel ]
-#   [ Delete ]   [ Cancel ]
+#   [ OK ]       [ Cancel ]
 #   [ Yes ]      [ No ]
 # (Windows users read left-to-right and expect the affirmative action first).
 PRESETS: dict[str, dict[str, Any]] = {
     "info": {
         "title": "Information",
-        "icon": "info.png",
-        "buttons": [{"label": "OK", "value": "ok", "role": "primary"}],
+        "icon": "info",
+        "buttons": [{"text": "OK", "value": "ok", "role": "primary"}],
         "default_button": "ok",
         "cancel_button": "ok",
     },
     "warning": {
         "title": "Warning",
-        "icon": "warning.png",
+        "icon": "warning",
         "buttons": [
-            {"label": "Proceed", "value": True, "role": "primary"},
-            {"label": "Cancel", "value": False, "role": "cancel"},
+            {"text": "OK", "value": "ok", "role": "primary"},
+            {"text": "Cancel", "value": "cancel", "role": "cancel"},
         ],
-        "default_button": True,
-        "cancel_button": False,
+        "default_button": "ok",
+        "cancel_button": "cancel",
     },
     "error": {
         "title": "Error",
-        "icon": "error.png",
-        "buttons": [{"label": "Dismiss", "value": "dismiss", "role": "destructive"}],
-        "default_button": "dismiss",
-        "cancel_button": "dismiss",
+        "icon": "error",
+        "buttons": [{"text": "OK", "value": "ok", "role": "destructive"}],
+        "default_button": "ok",
+        "cancel_button": "ok",
     },
     "question": {
         "title": "Confirm",
-        "icon": "question.png",
+        "icon": "question",
         "buttons": [
-            {"label": "Yes", "value": True, "role": "primary"},
-            {"label": "No", "value": False, "role": "cancel"},
+            {"text": "Yes", "value": "yes", "role": "primary"},
+            {"text": "No", "value": "no", "role": "cancel"},
         ],
-        "default_button": True,
-        "cancel_button": False,
+        "default_button": "yes",
+        "cancel_button": "no",
     },
     "success": {
         "title": "Success",
-        "icon": "success.png",
-        "buttons": [{"label": "OK", "value": "ok", "role": "primary"}],
+        "icon": "success",
+        "buttons": [{"text": "OK", "value": "ok", "role": "primary"}],
         "default_button": "ok",
         "cancel_button": "ok",
     },
