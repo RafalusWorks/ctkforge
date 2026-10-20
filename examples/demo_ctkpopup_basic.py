@@ -17,7 +17,7 @@ def show_popup(parent: ctk.CTk) -> bool:
         sound=True,
     )
     # .get() blocks until the user clicks a button or dismisses the window
-    return bool(popup.get())
+    return popup.get() == "yes"
 
 
 def main() -> None:

@@ -18,7 +18,7 @@ def normalize_buttons(raw_buttons: Any) -> list[dict[str, Any]]:
 
     Supported input formats:
       - Full dictionary:
-          [{"label": "Delete", "value": "del", "role": "destructive"}]
+          [{"text": "Delete", "value": "del", "role": "destructive"}]
       - Tuples:
           [("Save", True)]                     -> role defaults to "primary"
           [("Delete", False, "destructive")]  -> explicit role
@@ -28,10 +28,10 @@ def normalize_buttons(raw_buttons: Any) -> list[dict[str, Any]]:
           ["Save", "Skip", "Cancel"] -> 3+ buttons: first="primary", last="cancel", middle="normal"
 
     Returns:
-        List of dicts, each guaranteed to have 'label', 'value', and 'role' keys.
+        List of dicts, each guaranteed to have 'text', 'value', and 'role' keys.
     """
     if not raw_buttons:
-        return [{"label": "OK", "value": "ok", "role": "primary"}]
+        return [{"text": "OK", "value": "ok", "role": "primary"}]
 
     # If developer accidentally passed a single string or dict instead of a list
     if isinstance(raw_buttons, (str, dict, tuple)):
@@ -43,40 +43,37 @@ def normalize_buttons(raw_buttons: Any) -> list[dict[str, Any]]:
     for index, item in enumerate(raw_buttons):
         # 1. Full dictionary format
         if isinstance(item, dict):
-            # Support both 'text' and 'label' for standard CustomTkinter syntax
-            label = str(item.get("text", item.get("label", "OK")))
-            value = item.get("value", label)
+            btn_text = str(item.get("text", item.get("label", "OK")))
+            value = item.get("value", btn_text)
             role = str(item.get("role", "normal"))
-            spec: dict[str, Any] = {"label": label, "value": value, "role": role}
+            spec: dict[str, Any] = {"text": btn_text, "value": value, "role": role}
 
-            # Optional custom color overrides per button
+            # Standard CustomTkinter color overrides per button
             for color_key in ("fg_color", "hover_color", "text_color"):
                 if color_key in item:
                     spec[color_key] = item[color_key]
-            if "color" in item and "fg_color" not in spec:
-                spec["fg_color"] = item["color"]
 
             normalized.append(spec)
 
         # 2. Tuple format
         elif isinstance(item, tuple):
             if len(item) == 1:
-                label = str(item[0])
-                value = label
+                btn_text = str(item[0])
+                value = btn_text
                 role = "primary" if index == 0 else "normal"
             elif len(item) == 2:
-                label = str(item[0])
+                btn_text = str(item[0])
                 value = item[1]
                 role = "primary" if index == 0 else "normal"
             else:
-                label = str(item[0])
+                btn_text = str(item[0])
                 value = item[1]
                 role = str(item[2])
-            normalized.append({"label": label, "value": value, "role": role})
+            normalized.append({"text": btn_text, "value": value, "role": role})
 
         # 3. Plain string format
         elif isinstance(item, str):
-            label = item
+            btn_text = item
             value = item
 
             if total == 1:
@@ -91,12 +88,12 @@ def normalize_buttons(raw_buttons: Any) -> list[dict[str, Any]]:
                 else:
                     role = "normal"
 
-            normalized.append({"label": label, "value": value, "role": role})
+            normalized.append({"text": btn_text, "value": value, "role": role})
 
         # Fallback for unrecognized types
         else:
-            text = str(item)
-            normalized.append({"label": text, "value": item, "role": "normal"})
+            btn_text = str(item)
+            normalized.append({"text": btn_text, "value": item, "role": "normal"})
 
     return normalized
 
@@ -111,7 +108,7 @@ def create_button(
 
     Args:
         master: The parent container widget.
-        spec: Button definition dictionary containing 'label', 'value', and 'role'.
+        spec: Button definition dictionary containing 'text', 'value', and 'role'.
         on_click: Callback function invoked with button's semantic value when clicked.
         role_colors: Optional role-to-color mapping overriding default ROLE_COLORS.
 
@@ -123,7 +120,7 @@ def create_button(
     styling = colors_map.get(role, colors_map.get("normal", {}))
 
     kwargs: dict[str, Any] = {
-        "text": spec.get("label", "OK"),
+        "text": spec.get("text", spec.get("label", "OK")),
         "command": lambda: on_click(spec.get("value")),
         "height": 36,
         "corner_radius": 6,

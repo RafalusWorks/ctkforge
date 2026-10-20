@@ -3,9 +3,7 @@
 Internal helper module. Not part of the public API.
 """
 
-import importlib.resources
 import sys
-from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -48,18 +46,14 @@ def load_stock_icon(
     """
     filename = icon_name if icon_name.endswith(".png") else f"{icon_name}.png"
 
-    with suppress(OSError, TypeError, ValueError, ModuleNotFoundError):
-        # Modern standard library package resource locator
-        resource_ref = importlib.resources.files(__package__).joinpath("icons", filename)
-        # In Python 3.9+, as_file yields a context or path
-        with importlib.resources.as_file(resource_ref) as path:
-            if path.is_file():
-                return load_image_as_ctk(path, display_size)
+    # 1. Direct package location (works anywhere the package is installed)
+    local_path = Path(__file__).parent / "icons" / filename
 
-    # Direct filesystem fallback for development / unpacked trees
-    local_path = Path(__file__).resolve().parent / "icons" / filename
-    if local_path.is_file():
-        return load_image_as_ctk(local_path, display_size)
+    # 2. If not found locally, route through resource_path for PyInstaller bundles
+    target = local_path if local_path.is_file() else resource_path(f"icons/{filename}")
+
+    if target and target.is_file():
+        return load_image_as_ctk(target, display_size)
 
     return None
 
@@ -87,7 +81,7 @@ def resolve_icon(
     """
     if icon_input is None:
         if preset_name and preset_name in PRESETS:
-            stock_name = PRESETS[preset_name].get("icon", f"{preset_name}.png")
+            stock_name = PRESETS[preset_name].get("icon", preset_name)
             return load_stock_icon(stock_name, display_size)
         return None
 
@@ -95,22 +89,16 @@ def resolve_icon(
     if isinstance(icon_input, ctk.CTkImage):
         return icon_input
 
-    # If it's a known stock preset keyword (e.g. "warning", "info")
+    # Step 2: Known stock preset keyword ("warning", "info", "error", "question", "success")
     if isinstance(icon_input, str) and icon_input in PRESETS:
-        stock_name = PRESETS[icon_input].get("icon", f"{icon_input}.png")
+        stock_name = PRESETS[icon_input].get("icon", icon_input)
         stock_img = load_stock_icon(stock_name, display_size)
         if stock_img is not None:
             return stock_img
 
+    # Step 3: Custom image file path (must be a valid file in CWD, _MEIPASS, or sys.argv[0])
     if isinstance(icon_input, (str, Path)):
         str_path = str(icon_input)
-
-        # Also check if it's a stock icon filename directly (e.g., "warning.png")
-        stock_img = load_stock_icon(str_path, display_size)
-        if stock_img is not None:
-            return stock_img
-
-        # Step 2: Unified resource locator (CWD, PyInstaller _MEIPASS, sys.argv[0])
         resolved_file = resource_path(str_path)
         if resolved_file is not None and resolved_file.is_file():
             try:
@@ -121,7 +109,7 @@ def resolve_icon(
                     file=sys.stderr,
                 )
 
-    # Step 5: Option B Smart Fail-Safe
+    # Step 4: Option B Smart Fail-Safe
     print(
         f"[CTkPopup Warning]: Custom icon '{icon_input}' could not be resolved. "
         f"Falling back to preset stock icon.",
@@ -129,7 +117,7 @@ def resolve_icon(
     )
 
     if preset_name and preset_name in PRESETS:
-        stock_name = PRESETS[preset_name].get("icon", f"{preset_name}.png")
+        stock_name = PRESETS[preset_name].get("icon", preset_name)
         return load_stock_icon(stock_name, display_size)
 
     return None
