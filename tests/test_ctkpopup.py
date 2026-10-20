@@ -134,7 +134,15 @@ def run_popup_test_suite(root: ctk.CTk, visual: bool = False) -> None:
         assert preset_cfg["cancel_button"] == spec["cancel"], (
             f"[11/11 Failed] {preset_name} cancel_button expected {spec['cancel']}, got {preset_cfg['cancel_button']}"
         )
-    print("[11/11] Standardized lowercase preset return tokens & defaults: PASSED")
+        # Verify live Escape / window 'X' cancellation behavior
+        live_popup = CTkPopup(master=root, text=f"Testing {preset_name}", preset=preset_name)
+        root.update()
+        live_popup._on_cancel()
+        root.update()
+        assert live_popup.get() == spec["cancel"], (
+            f"[11/11 Failed] {preset_name} _on_cancel expected {spec['cancel']}, got {live_popup.get()}"
+        )
+    print("[11/11] Standardized lowercase preset return tokens & defaults (including Escape/X dismissal): PASSED")
 
 
 def run_headless_tests() -> None:
