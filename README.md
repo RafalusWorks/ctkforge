@@ -12,7 +12,7 @@ pip install ctkforge
 
 ## Features
 
-- **[CTkPopup](docs/popup.md)**: A modern popup dialog widget for alerts, confirmations, and error messages. Includes ready-to-use types (info, warning, error, question, success), keyboard shortcuts (Enter to confirm, Escape to cancel), clean Windows 11 button styling, and automatically turns into a scrollable box for long error text. See [detailed documentation](docs/popup.md).
+- **[CTkPopup](docs/popup.md)**: A modern popup modal dialog widget for alerts, confirmations, and error messages. Includes ready-to-use types (info, warning, error, question, success), keyboard shortcuts (Enter to confirm, Escape to cancel), clean Windows 11 button styling, and automatically turns into a scrollable box for long error text. See [detailed documentation](docs/popup.md).
 
 - **[CTkSpinbox](docs/spinbox.md)**: A number input widget with classic up and down arrow buttons (`▲`/`▼`). Supports mouse wheel scrolling, arrow key adjustments, minimum/maximum limits, custom steps, and matches CustomTkinter's colors and rounded corners. See [detailed documentation](docs/spinbox.md).
 

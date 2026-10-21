@@ -51,6 +51,8 @@ Homepage = "https://github.com/RafalusWorks/ctkforge"
 Repository = "https://github.com/RafalusWorks/ctkforge"
 Documentation = "https://github.com/RafalusWorks/ctkforge#readme"
 Issues = "https://github.com/RafalusWorks/ctkforge/issues"
+Discussions = "https://github.com/RafalusWorks/ctkforge/discussions"
+
 
 [tool.setuptools.packages.find]
 where = ["src"]
