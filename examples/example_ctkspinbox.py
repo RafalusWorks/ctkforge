@@ -1,3 +1,12 @@
+"""Quick-start example for CTkSpinbox numeric controls.
+
+Wires a stepping spinbox to a live change callback, demonstrating numeric
+bounds, step sizing, and reactive UI updates as values change.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
+"""
+
 import customtkinter as ctk
 
 from ctkforge import CTkSpinbox

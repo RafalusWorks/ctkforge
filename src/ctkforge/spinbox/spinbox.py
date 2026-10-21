@@ -1,4 +1,8 @@
-"""Spinbox widget for CustomTkinter."""
+"""Spinbox widget for CustomTkinter.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
+"""
 
 from collections.abc import Callable
 from typing import Any, override

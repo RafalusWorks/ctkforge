@@ -59,7 +59,7 @@ class SelectionManager:
 
     @property
     def selected_rows(self) -> set[int]:
-        """Return current set of selected display row indices."""
+        """Return current set of selected display row indexes."""
         return self._selected_rows
 
     @property
@@ -233,7 +233,7 @@ class SelectionManager:
         self._focused_row = row_index
         self._focused_col = col_index
 
-    def adjust_indices_after_insert(self, insert_display_pos: int) -> None:
+    def adjust_indexes_after_insert(self, insert_display_pos: int) -> None:
         """Shift selected row and cell positions down when a new row is inserted."""
         if self._selected_rows:
             self._selected_rows = {
@@ -249,7 +249,7 @@ class SelectionManager:
         if self._anchor_row is not None and self._anchor_row >= insert_display_pos:
             self._anchor_row += 1
 
-    def adjust_indices_after_delete(self, deleted_display_targets: set[int], new_total_rows: int) -> None:
+    def adjust_indexes_after_delete(self, deleted_display_targets: set[int], new_total_rows: int) -> None:
         """Shift selected row and cell positions up after rows are deleted."""
         self._selected_rows.difference_update(deleted_display_targets)
 

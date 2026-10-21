@@ -2,6 +2,8 @@
 
 Custom extension components and widgets for [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter).
 
+![CTkForge Preview](docs/assets/ctkforge_preview.jpg)
+
 ## Installation
 
 ```bash
@@ -10,11 +12,11 @@ pip install ctkforge
 
 ## Features
 
-- **[CTkPopup](docs/CTkPopup.md)**: A modern popup dialog widget for alerts, confirmations, and error messages. Includes ready-to-use types (info, warning, error, question, success), keyboard shortcuts (Enter to confirm, Escape to cancel), clean Windows 11 button styling, and automatically turns into a scrollable box for long error text. See [detailed documentation](docs/CTkPopup.md) or run [example_ctkpopup.py](examples/example_ctkpopup.py).
+- **[CTkPopup](docs/popup.md)**: A modern popup dialog widget for alerts, confirmations, and error messages. Includes ready-to-use types (info, warning, error, question, success), keyboard shortcuts (Enter to confirm, Escape to cancel), clean Windows 11 button styling, and automatically turns into a scrollable box for long error text. See [detailed documentation](docs/popup.md).
 
-- **[CTkSpinbox](docs/CTkSpinbox.md)**: A number input widget with classic up and down arrow buttons (`▲`/`▼`). Supports mouse wheel scrolling, arrow key adjustments, minimum/maximum limits, custom steps, and matches CustomTkinter's colors and rounded corners. See [detailed documentation](docs/CTkSpinbox.md) or run [example_ctkspinbox.py](examples/example_ctkspinbox.py).
+- **[CTkSpinbox](docs/spinbox.md)**: A number input widget with classic up and down arrow buttons (`▲`/`▼`). Supports mouse wheel scrolling, arrow key adjustments, minimum/maximum limits, custom steps, and matches CustomTkinter's colors and rounded corners. See [detailed documentation](docs/spinbox.md).
 
-- **[CTkTable](docs/table.md)**: A fast, smooth data table widget built to handle massive datasets without slowing down. Features smart column sorting, row and cell selection, double-click cell editing, copy-pasting (`Ctrl+C`), auto-fitting column widths, and optional alternating row colors. See [API reference](docs/table.md), [user guide](docs/table_user_guide.md), or run [demo_ctktable_basic.py](examples/demo_ctktable_basic.py).
+- **[CTkTable](docs/table.md)**: A fast, smooth data table widget built to handle massive datasets without slowing down. Features smart column sorting, row and cell selection, double-click cell editing, copy-pasting (`Ctrl+C`), auto-fitting column widths, and optional alternating row colors. See [API reference](docs/table.md), [user guide](docs/table_user_guide.md).
 - **Universal DPI `unscale` Helper**: Utility function to convert raw physical pixel dimensions from Tkinter (`winfo_*`) back to unscaled 100% baseline (96 DPI) values for CustomTkinter windows.
 - **Resource Locator (`resource_path`)**: Robust asset path resolver that finds images, icons, audio, and data files across direct filesystem paths, the script entry directory (`sys.argv[0]`), and PyInstaller single-file bundle extractions (`sys._MEIPASS`).
 
@@ -32,8 +34,8 @@ app = ctk.CTk()
 popup = CTkPopup(
     master=app,
     title="Confirm Action",
-    message="Do you want to proceed with the update?",
-    type="question",
+    text="Do you want to proceed with the update?",
+    preset="question",
 )
 
 choice = popup.get()
@@ -45,7 +47,7 @@ else:
 app.mainloop()
 ```
 
-*(See [example_ctkpopup.py](examples/example_ctkpopup.py) and [demo_ctkpopup.py](examples/demo_ctkpopup.py) for interactive demos).*
+*(See [demo_ctkpopup_basic.py](examples/demo_ctkpopup_basic.py), and [demo_ctkpopup_test_suite.py](examples/demo_ctkpopup_test_suite.py) for interactive demos).*
 
 ### 2. CTkSpinbox
 
@@ -69,7 +71,7 @@ spinbox.pack(padx=20, pady=20)
 app.mainloop()
 ```
 
-*(See [example_ctkspinbox.py](examples/example_ctkspinbox.py) for the standalone snippet, and [demo_ctkspinbox.py](examples/demo_ctkspinbox.py) for a complete app).*
+*(See [demo_ctkspinbox.py](examples/demo_ctkspinbox.py) for interactive demo).*
 
 ### 3. CTkTable Data Grid
 
@@ -82,9 +84,9 @@ app.geometry("800x400")
 
 headers = ["ID", "Employee Name", "Department", "Salary"]
 data = [
-    ["101", "Ada Lovelace", "Research", "$125,000"],
-    ["102", "Alan Turing", "Data Systems", "$135,000"],
-    ["103", "Grace Hopper", "Engineering", "$130,000"],
+    ["101", "Ada Lovelace", "Research", "£125,000"],
+    ["102", "Alan Turing", "Data Systems", "£135,000"],
+    ["103", "Grace Hopper", "Engineering", "£130,000"],
 ]
 
 table = CTkTable(
@@ -103,7 +105,7 @@ table.pack(fill="both", expand=True, padx=20, pady=20)
 app.mainloop()
 ```
 
-*(See [example_ctktable.py](examples/example_ctktable.py), [demo_ctktable_basic.py](examples/demo_ctktable_basic.py), and [demo_ctktable_clipboard_and_crud.py](examples/demo_ctktable_clipboard_and_crud.py) for interactive demos).*
+*(See [demo_ctktable_basic.py](examples/demo_ctktable_basic.py), and [demo_ctktable_clipboard_and_crud.py](examples/demo_ctktable_clipboard_and_crud.py) for interactive demos).*
 
 ### 4. Universal DPI Unscaling (`unscale`)
 
@@ -137,3 +139,6 @@ from ctkforge import resource_path
 icon_path = resource_path("assets/custom_icon.png")
 ```
 
+---
+
+<p align="center">Crafted and maintained by <b>Rafalus</b>. Happy forging!</p>

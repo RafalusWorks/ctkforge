@@ -1,4 +1,11 @@
-"""Quick-start example demonstrating CTkPopup usage."""
+"""Quick-start example for CTkPopup modal dialogs.
+
+Opens a blocking confirmation dialog with the question preset, capturing
+the user's boolean choice to update status text in real time.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
+"""
 
 from __future__ import annotations
 

@@ -69,7 +69,7 @@ def resolve_icon(
       1. Pre-configured ctk.CTkImage -> use as-is.
       2. Preset keyword or bundled stock icon filename.
       3. Unified resource locator via resource_path (CWD, PyInstaller _MEIPASS, sys.argv[0]).
-      4. Option B Smart Fail-Safe: Log warning and fall back to stock preset icon.
+      4. Fallback: Log warning and fall back to stock preset icon.
 
     Args:
         icon_input: Image object, file path, stock preset name, or None.
@@ -85,18 +85,18 @@ def resolve_icon(
             return load_stock_icon(stock_name, display_size)
         return None
 
-    # Step 1: Already a ctk.CTkImage
+    # Already a ctk.CTkImage
     if isinstance(icon_input, ctk.CTkImage):
         return icon_input
 
-    # Step 2: Known stock preset keyword ("warning", "info", "error", "question", "success")
+    # Known stock preset keyword ("warning", "info", "error", "question", "success")
     if isinstance(icon_input, str) and icon_input in PRESETS:
         stock_name = PRESETS[icon_input].get("icon", icon_input)
         stock_img = load_stock_icon(stock_name, display_size)
         if stock_img is not None:
             return stock_img
 
-    # Step 3: Custom image file path (must be a valid file in CWD, _MEIPASS, or sys.argv[0])
+    # Custom image file path (valid file in CWD, _MEIPASS, or sys.argv[0])
     if isinstance(icon_input, (str, Path)):
         str_path = str(icon_input)
         resolved_file = resource_path(str_path)
@@ -109,7 +109,7 @@ def resolve_icon(
                     file=sys.stderr,
                 )
 
-    # Step 4: Option B Smart Fail-Safe
+    # Fall back to preset stock icon if custom icon cannot be resolved
     print(
         f"[CTkPopup Warning]: Custom icon '{icon_input}' could not be resolved. "
         f"Falling back to preset stock icon.",

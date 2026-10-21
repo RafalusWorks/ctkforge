@@ -1,4 +1,11 @@
-"""Demonstration of creating and using custom presets in CTkPopup."""
+"""Demo of custom presets in CTkPopup.
+
+Shows how to define and register a custom preset configuration with tailored
+buttons, custom icons, and action roles, then handle the returned choice token.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
+"""
 
 from __future__ import annotations
 

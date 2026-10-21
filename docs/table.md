@@ -177,7 +177,7 @@ new_idx = table.insert_row(values=[4, "John von Neumann", "Polymath", "$150,000"
 top_idx = table.insert_row(index=0, values=[5, "Grace Hopper", "Scientist", "$160,000"])
 ```
 
-#### `.delete_rows(row_indices: list[int] | set[int] | int) -> None`
+#### `.delete_rows(row_indexes: list[int] | set[int] | int) -> None`
 Deletes one or multiple rows in a single batch. Updates internal sort maps, clamps scroll positions, and cleans up selection sets.
 ```python
 table.delete_rows(2)  # Delete single row
@@ -188,6 +188,37 @@ table.delete_rows([0, 1, 3])  # Delete multiple rows in one operation
 Updates a cell value in-place. If the table is actively sorted by `col_index`, the sort order is refreshed automatically.
 ```python
 table.update_cell(0, 3, "$140,000")
+```
+
+#### `.update_row(display_row: int, values: list[Any], notify: bool = True) -> None`
+Atomically updates an entire row record in-place. If the table is actively sorted by one of the modified columns, the sort order refreshes automatically.
+```python
+table.update_row(0, [1, "Ada Lovelace", "Mathematician", "$150,000"])
+```
+
+#### `.get_raw_row_index(display_row: int | Sequence[int]) -> int | list[int]`
+Translates one or multiple visual display row indexes to raw storage indexes.
+```python
+# Pass a single visual row index:
+raw_row_index = table.get_raw_row_index(
+    disp_row_index
+)  # e.g. disp_row_index = 5 --> raw_row_index = 42
+
+# Or pass a list of visual row indexes:
+selected_rows = table.get_selected_rows()  # e.g. [5, 12]
+raw_row_indexes = table.get_raw_row_index(selected_rows)  # e.g. [42, 105]
+```
+
+#### `.get_display_row_index(raw_row: int | Sequence[int]) -> int | list[int]`
+Translates one or multiple raw storage indexes to current visual display row indexes.
+```python
+# Pass a single raw row index:
+disp_row_index = table.get_display_row_index(raw_row_index)
+table.select_row(disp_row_index)
+table.scroll_to(row=disp_row_index)
+
+# Or translate multiple raw row indexes at once:
+disp_row_indexes = table.get_display_row_index([42, 105])  # e.g. [0, 2]
 ```
 
 #### `.get_row(row_index: int) -> list[Any]`
@@ -207,7 +238,7 @@ name = table.get_cell(0, 1)  # "Ada Lovelace"
 ### Selection Management
 
 #### `.get_selected_rows() -> list[int]`
-Returns a sorted list of selected display row indices.
+Returns a sorted list of selected display row indexes.
 - In row selection mode: returns all selected rows.
 - In cell selection mode: returns the deduplicated rows containing any selected cells.
 ```python
@@ -299,6 +330,13 @@ table.scroll_to(row=0, col=5)  # Jump to top row, column 5
 Measures the text of all rows and the header title for the given column using font metrics, and adjusts the column width to fit content with padding.
 ```python
 table.auto_fit_column(1)  # Fit column 1 to longest text
+```
+
+#### `.auto_fit_columns(columns: list[int] | None = None) -> None`
+Measures and fits column widths for all columns (or a specified list of column indexes) in a single batched pass with one redraw cycle.
+```python
+table.auto_fit_columns()  # Fit all columns to content on load
+table.auto_fit_columns([0, 1, 3])  # Fit specific subset of columns
 ```
 
 ---

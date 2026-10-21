@@ -2,7 +2,9 @@
 
 A modern, DPI-aware modal dialog and alert popup for CustomTkinter with semantic button roles, automatic scrolling for long messages, and preset themes.
 
-![CTkPopup Preview](assets/popup_preview.png)
+> For practical recipes and usage walkthroughs, see the [CTkPopup User Guide](popup_user_guide.md).
+
+![CTkPopup Preview](assets/popup_preview.jpg)
 
 ---
 
