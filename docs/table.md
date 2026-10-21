@@ -2,6 +2,8 @@
 
 A fast, modern data table widget for CustomTkinter with built-in sorting, selection, and in-place cell editing.
 
+> For practical recipes and usage walkthroughs, see the [CTkTable User Guide](table_user_guide.md).
+
 ![CTkTable Preview](assets/table_preview.jpg)
 
 
@@ -200,9 +202,7 @@ table.update_row(0, [1, "Ada Lovelace", "Mathematician", "$150,000"])
 Translates one or multiple visual display row indexes to raw storage indexes.
 ```python
 # Pass a single visual row index:
-raw_row_index = table.get_raw_row_index(
-    disp_row_index
-)  # e.g. disp_row_index = 5 --> raw_row_index = 42
+raw_row_index = table.get_raw_row_index(disp_row_index)  # e.g. disp_row_index = 5 --> raw_row_index = 42
 
 # Or pass a list of visual row indexes:
 selected_rows = table.get_selected_rows()  # e.g. [5, 12]
