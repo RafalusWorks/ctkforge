@@ -168,8 +168,8 @@ class TableRenderer:
             # Horizontal divider line
             canvas.create_line(0, y_bottom, canvas_width, y_bottom, fill=divider_color_hex)
 
-            storage_row = data_model.get_storage_row_index(r)
-            row_data = data_model.values[storage_row]
+            raw_row = data_model.get_raw_row_index(r)
+            row_data = data_model.values[raw_row]
             row_len = len(row_data)
 
             for c in range(start_col, min(end_col, row_len)):

@@ -1,11 +1,15 @@
-"""High-performance virtualized table widget for CustomTkinter."""
+"""High-performance virtualized table widget for CustomTkinter.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
+"""
 
 import tkinter as tk
 import tkinter.font as tkfont
 from bisect import bisect_left, bisect_right
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from contextlib import suppress
-from typing import Any, Literal, override
+from typing import Any, Literal, overload, override
 
 import customtkinter as ctk
 
@@ -344,7 +348,9 @@ class CTkTable(ctk.CTkFrame):
         self._v_scrollbar.grid(
             row=1, column=1, sticky="ns", padx=(0, spacing), pady=body_pady
         )
-        self._h_scrollbar.grid(row=2, column=0, sticky="ew", padx=(spacing, 0), pady=(0, spacing))
+        self._h_scrollbar.grid(
+            row=2, column=0, sticky="ew", padx=(spacing, 0), pady=(0, spacing)
+        )
         self._bottom_corner.grid(
             row=2, column=1, sticky="nsew", padx=(0, spacing), pady=(0, spacing)
         )
@@ -875,10 +881,18 @@ class CTkTable(ctk.CTkFrame):
         if self._column_resizer.hover_divider_col is not None:
             self.auto_fit_column(self._column_resizer.hover_divider_col - 1)
 
-    def auto_fit_column(self, col_index: int) -> None:
-        """Calculate and snap column width to fit header and cell text without locking other columns."""
+    def auto_fit_columns(self, columns: list[int] | None = None) -> None:
+        """Calculate and snap column widths to fit content in a single batched pass."""
         total_cols = self._get_total_cols()
-        if not (0 <= col_index < total_cols):
+        if total_cols == 0:
+            return
+
+        target_cols = (
+            [c for c in columns if 0 <= c < total_cols]
+            if columns is not None
+            else list(range(total_cols))
+        )
+        if not target_cols:
             return
 
         scaled_hfont = self._apply_font_scaling(self._header_font)
@@ -886,41 +900,46 @@ class CTkTable(ctk.CTkFrame):
         scaled_bfont = self._apply_font_scaling(self._font)
         body_font_obj = tkfont.Font(font=scaled_bfont)
 
-        header_text = (
-            self._headers[col_index]
-            if (self._headers and col_index < len(self._headers))
-            else None
-        )
-        sample_rows = min(AUTOFIT_SAMPLE_ROWS, self._data_model.row_count)
-        sample_values: list[str] = []
-        for r in range(sample_rows):
-            try:
-                sample_values.append(str(self._data_model.get_cell(r, col_index)))
-            except IndexError:
-                pass
-
         padding = scale(self, AUTOFIT_PADDING_PX)
-        fitted_w = ColumnResizer.calculate_autofit_width(
-            header_text=header_text,
-            sample_values=sample_values,
-            header_measure=header_font_obj.measure,
-            body_measure=body_font_obj.measure,
-            padding=padding,
-            fallback_width=AUTOFIT_FALLBACK_WIDTH,
-        )
-        fit_width = unscale(self, fitted_w)
+        sample_rows = min(AUTOFIT_SAMPLE_ROWS, self._data_model.row_count)
 
-        # Update dictionary or list format cleanly
-        if isinstance(self._column_widths, dict):
-            self._column_widths[col_index] = fit_width
-        elif isinstance(self._column_widths, list):
-            while len(self._column_widths) <= col_index:
+        if isinstance(self._column_widths, list):
+            while len(self._column_widths) < total_cols:
                 self._column_widths.append(unscale(self, MIN_COLUMN_WIDTH))
-            self._column_widths[col_index] = fit_width
-        else:
-            self._column_widths = {col_index: fit_width}
+        elif not isinstance(self._column_widths, dict):
+            self._column_widths = {}
+
+        for col_index in target_cols:
+            header_text = (
+                self._headers[col_index]
+                if (self._headers and col_index < len(self._headers))
+                else None
+            )
+            sample_values: list[str] = []
+            for r in range(sample_rows):
+                try:
+                    sample_values.append(str(self._data_model.get_cell(r, col_index)))
+                except IndexError:
+                    pass
+
+            fitted_w = ColumnResizer.calculate_autofit_width(
+                header_text=header_text,
+                sample_values=sample_values,
+                header_measure=header_font_obj.measure,
+                body_measure=body_font_obj.measure,
+                padding=padding,
+                fallback_width=AUTOFIT_FALLBACK_WIDTH,
+            )
+            fit_width = unscale(self, fitted_w)
+
+            if isinstance(self._column_widths, (dict, list)):
+                self._column_widths[col_index] = fit_width
 
         self._redraw()
+
+    def auto_fit_column(self, col_index: int) -> None:
+        """Calculate and snap column width to fit header and cell text without locking other columns."""
+        self.auto_fit_columns([col_index])
 
     # -------------------------------------------------------------------------
     # Viewport Redraw Orchestrator
@@ -1043,7 +1062,7 @@ class CTkTable(ctk.CTkFrame):
     # -------------------------------------------------------------------------
 
     def get_selected_rows(self) -> list[int]:
-        """Return sorted list of selected display row indices."""
+        """Return sorted list of selected display row indexes."""
         return sorted(self._selection_manager.selected_rows)
 
     def get_selected_cells(self) -> list[tuple[int, int]]:
@@ -1138,6 +1157,30 @@ class CTkTable(ctk.CTkFrame):
         """Return the record values at display index row_index."""
         return self._data_model.get_row(row_index)
 
+    @overload
+    def get_raw_row_index(self, display_row: int) -> int: ...
+
+    @overload
+    def get_raw_row_index(self, display_row: Sequence[int]) -> list[int]: ...
+
+    def get_raw_row_index(self, display_row: int | Sequence[int]) -> int | list[int]:
+        """Translate one or multiple visual display row indexes to raw storage indexes."""
+        if isinstance(display_row, (list, tuple, set)):
+            return [self._data_model.get_raw_row_index(r) for r in display_row]
+        return self._data_model.get_raw_row_index(display_row)
+
+    @overload
+    def get_display_row_index(self, raw_row: int) -> int: ...
+
+    @overload
+    def get_display_row_index(self, raw_row: Sequence[int]) -> list[int]: ...
+
+    def get_display_row_index(self, raw_row: int | Sequence[int]) -> int | list[int]:
+        """Translate one or multiple raw row indexes to current visual display indexes."""
+        if isinstance(raw_row, (list, tuple, set)):
+            return [self._data_model.get_display_row_index(r) for r in raw_row]
+        return self._data_model.get_display_row_index(raw_row)
+
     def get_cell(self, row_index: int, col_index: int) -> Any:
         """Return the cell value at display row and column."""
         return self._data_model.get_cell(row_index, col_index)
@@ -1156,6 +1199,37 @@ class CTkTable(ctk.CTkFrame):
         if notify and self.on_cell_edit is not None:
             self.on_cell_edit(storage_row, col_index, old_val, value)
 
+    def update_row(
+        self, display_row: int, values: list[Any], notify: bool = True
+    ) -> None:
+        """Update an entire row in-place, updating sorting if relevant."""
+        if (
+            self._editor.is_editing
+            and self._selection_manager.focused_row == display_row
+        ):
+            self._cancel_edit()
+
+        total_cols = self._get_total_cols()
+        old_row, storage_row = self._data_model.update_row(
+            display_row, values, total_cols=total_cols
+        )
+
+        sort_col = self._data_model.sort_column
+        if sort_col is not None and (
+            sort_col >= len(old_row)
+            or sort_col >= len(values)
+            or old_row[sort_col] != values[sort_col]
+        ):
+            self.sort_by(sort_col, ascending=self._data_model.sort_ascending)
+        else:
+            self._redraw()
+
+        if notify and self.on_cell_edit is not None:
+            max_check = min(len(old_row), len(values))
+            for c in range(max_check):
+                if old_row[c] != values[c]:
+                    self.on_cell_edit(storage_row, c, old_row[c], values[c])
+
     def insert_row(
         self, index: int | None = None, values: list[Any] | None = None
     ) -> int:
@@ -1164,7 +1238,7 @@ class CTkTable(ctk.CTkFrame):
         total_cols = self._get_total_cols()
         visual_insert_pos, _ = self._data_model.insert_row(index, values, total_cols)
 
-        self._selection_manager.adjust_indices_after_insert(visual_insert_pos)
+        self._selection_manager.adjust_indexes_after_insert(visual_insert_pos)
 
         if self._data_model.sort_column is not None:
             self.sort_by(
@@ -1180,14 +1254,14 @@ class CTkTable(ctk.CTkFrame):
 
         return visual_insert_pos
 
-    def delete_rows(self, row_indices: list[int] | set[int] | int) -> None:
+    def delete_rows(self, row_indexes: list[int] | set[int] | int) -> None:
         """Delete one or multiple display rows and adjust selection mappings."""
         self._cancel_edit()
-        deleted_targets = self._data_model.delete_rows(row_indices)
+        deleted_targets = self._data_model.delete_rows(row_indexes)
         if not deleted_targets:
             return
 
-        self._selection_manager.adjust_indices_after_delete(
+        self._selection_manager.adjust_indexes_after_delete(
             deleted_targets, self._data_model.row_count
         )
 
@@ -1338,7 +1412,9 @@ class CTkTable(ctk.CTkFrame):
             needs_redraw = True
 
         if "header_height" in kwargs:
-            self._header_height = max(MIN_HEADER_HEIGHT, int(kwargs.pop("header_height")))
+            self._header_height = max(
+                MIN_HEADER_HEIGHT, int(kwargs.pop("header_height"))
+            )
             needs_redraw = True
 
         if "border_spacing" in kwargs:

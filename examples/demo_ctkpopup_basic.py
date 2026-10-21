@@ -1,4 +1,10 @@
-"""Basic demo for CTkPopup. Just a simple window, a button, and a popup."""
+"""Basic demo for CTkPopup. Just a simple window, a button, and a popup.
+
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
+
+"""
 
 from __future__ import annotations
 

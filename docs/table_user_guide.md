@@ -97,6 +97,7 @@ You can also listen for live selection changes using the `command` callback:
 def on_selection_change(selected_items):
     print("User selected:", selected_items)
 
+
 table = CTkTable(..., command=on_selection_change)
 ```
 
@@ -106,6 +107,11 @@ table = CTkTable(..., command=on_selection_change)
 
 * **Manual Dragging**: Hover your mouse over the vertical divider line between any two column headers. The cursor will change to a double-headed arrow (`<->`). Click and drag left or right to make the column wider or narrower.
 * **Double-Click to Auto-Fit**: Double-click any header divider line. The table will automatically measure the header text and the data in that column, snapping the width to fit the content cleanly.
+* **Programmatic Auto-Fit in Code**: Call `table.auto_fit_columns()` on startup or after loading data to measure and snap all columns in a single pass without manual pixel guesses:
+  ```python
+  table.auto_fit_columns()  # Auto-fit all columns
+  table.auto_fit_column(0)  # Or auto-fit a single specific column
+  ```
 
 ---
 
@@ -124,8 +130,8 @@ By default, users can click any column header to sort. You can toggle interactiv
 ```python
 table = CTkTable(
     ...,
-    header_sortable=True,             # Base rule: True (all on) or False (all off)
-    header_sortable_exclude=[3, 4],   # Column numbers inverted from the base rule
+    header_sortable=True,  # Base rule: True (all on) or False (all off)
+    header_sortable_exclude=[3, 4],  # Column numbers inverted from the base rule
 )
 ```
 
@@ -147,10 +153,10 @@ Rather than relying on fragile automatic guessing, you can declare column types 
 table = CTkTable(
     ...,
     column_types={
-        0: "int",      # Column 0: Numeric comparison (1, 2, 10 instead of 1, 10, 2)
-        1: "date",     # Column 1: Date comparison
-        2: "str",      # Column 2: Standard alphabetical comparison
-    }
+        0: "int",  # Column 0: Numeric comparison (1, 2, 10 instead of 1, 10, 2)
+        1: "date",  # Column 1: Date comparison
+        2: "str",  # Column 2: Standard alphabetical comparison
+    },
 )
 ```
 Supported types: `"int"`, `"float"`, `"str"`, and `"date"`.
@@ -164,11 +170,12 @@ def parse_currency(val):
     cleaned = "".join(ch for ch in str(val) if ch.isdigit() or ch in ".-")
     return float(cleaned) if cleaned else 0.0
 
+
 table = CTkTable(
     ...,
     column_sort_keys={
         3: parse_currency,  # Column 3: Custom currency sorting
-    }
+    },
 )
 ```
 
@@ -220,7 +227,7 @@ By default, table cells are read-only (`editable=False`). This follows the exact
 ```python
 table = CTkTable(
     ...,
-    editable=False,                   # Base rule: False (all locked) or True (all editable)
+    editable=False,  # Base rule: False (all locked) or True (all editable)
     editable_columns_exclude=[1, 2],  # Column numbers inverted from the base rule
 )
 ```
@@ -230,8 +237,11 @@ Connect a callback to run code whenever a user modifies a cell:
 
 ```python
 def handle_cell_edit(row_index, col_index, old_value, new_value):
-    print(f"Row {row_index}, Col {col_index} changed from '{old_value}' to '{new_value}'")
+    print(
+        f"Row {row_index}, Col {col_index} changed from '{old_value}' to '{new_value}'"
+    )
     # You can trigger an auto-save or database update here
+
 
 table = CTkTable(..., on_cell_edit=handle_cell_edit)
 ```
@@ -278,19 +288,57 @@ table.delete_rows(selected)
 table.bind("<Delete>", lambda _e: table.delete_rows(table.get_selected_rows()))
 ```
 
-### 3. Updating a Cell in Code (`update_cell`)
+### 3. Updating Cells & Rows in Code (`update_cell`, `update_row`)
 ```python
 # Modify a single cell in-place (row, col, new_value):
 table.update_cell(0, 1, "Updated Customer Name")
+
+# Modify an entire row atomically (display_row, new_values):
+table.update_row(0, ["100", "Ada Lovelace", "12", "$600.00", "Verified"])
 ```
 
-### 4. Reading & Exporting Records (`get`, `get_row`, `get_cell`)
+### 4. Mapping Between Visual and Raw Indexes (`get_raw_row_index`, `get_display_row_index`)
+
+#### What is a Raw Index?
+When rows are added to the table, each row receives a permanent number: its **raw index** (`0, 1, 2...`). This number never changes, no matter how many times you sort or scroll. If you ever need to know what index position a row held at creation before the table was sorted, its raw index tells you.
+
+
+#### Practical Example
+In real applications, each row in the table usually shows only a fraction of your data. For example, the table might display only a song's **Title** and **Size**, while your Python code holds the actual list of **MP3 audio files**:
+
+```python
+my_mp3_files = [song_a, song_b, song_c]  # Raw index 0, 1, 2
+```
+
+The **raw index** is the permanent connection between each MP3 file and its metadata row in the table.
+
+When a user sorts the table (e.g. by Size), the rows on screen get shuffled into a new visual order. The only way to match a visual row back to its real MP3 file is with **`get_raw_row_index()`**:
+
+```python
+# Pass a single visual row index:
+raw_row_index = table.get_raw_row_index(disp_row_index)
+current_song = my_mp3_files[raw_row_index]
+
+# Or pass a list of visual row indexes:
+raw_row_indexes = table.get_raw_row_index(selected_rows)
+```
+
+#### Translating in Reverse
+If you know the raw index of an MP3 file (e.g. `2`) and want to find where it is currently displayed on screen after sorting:
+
+```python
+disp_row_index = table.get_display_row_index(2)
+table.select_row(disp_row_index)
+table.scroll_to(row=disp_row_index)
+```
+
+### 5. Reading & Exporting Records (`get`, `get_row`, `get_cell`)
 ```python
 # Export the full dataset in current visual sorted order (ideal for CSV/Excel export):
 all_visible_data = table.get()
 
 # Get all column values for a specific visual row:
-record = table.get_row(0)      # or table.get(row=0)
+record = table.get_row(0)  # or table.get(row=0)
 
 # Get a single visual cell value:
 customer_name = table.get_cell(row_index=0, col_index=1)  # or table.get(0, 1)
@@ -364,22 +412,25 @@ data = [
     ["104", "James Bond", "2", "$950.00", "Shipped"],
 ]
 
+
 def parse_price(val):
     cleaned = "".join(ch for ch in str(val) if ch.isdigit() or ch in ".-")
     return float(cleaned) if cleaned else 0.0
 
+
 def on_edit(row, col, old_val, new_val):
     print(f"Record #{row + 1} Col {col} edited: '{old_val}' -> '{new_val}'")
+
 
 table = CTkTable(
     app,
     headers=headers,
     values=data,
     column_widths=[90, 200, 100, 120, 130],
-    column_types={0: "int", 2: "int"},       # Numeric sorting on ID and Qty
-    column_sort_keys={3: parse_price},        # Custom currency sorting on Price
+    column_types={0: "int", 2: "int"},  # Numeric sorting on ID and Qty
+    column_sort_keys={3: parse_price},  # Custom currency sorting on Price
     editable=False,
-    editable_columns_exclude=[1, 2, 3],       # Only allow editing Name, Qty, Price
+    editable_columns_exclude=[1, 2, 3],  # Only allow editing Name, Qty, Price
     on_cell_edit=on_edit,
     selection_target="row",
     selection_mode="extended",

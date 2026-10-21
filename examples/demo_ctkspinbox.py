@@ -1,4 +1,13 @@
-"""CustomTkinter application featuring a classic stacked spinbox widget."""
+"""Demo of CTkSpinbox numeric controls in CustomTkinter.
+
+Shows how to set up and read a numeric spinbox:
+  - Setting default, minimum, and maximum value boundaries.
+  - Customizing step increments for numeric stepping.
+  - Retrieving current values alongside standard entry widgets in a form.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
+"""
 
 from typing import Final
 
@@ -131,7 +140,8 @@ class WelcomeApp(ctk.CTk):
         )
 
     def _on_closing(self) -> None:
-        """Gracefully destroy window on close request."""
+        """Stop the event loop immediately and destroy window resources."""
+        self.quit()
         self.destroy()
 
 

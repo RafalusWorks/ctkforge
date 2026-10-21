@@ -1,12 +1,12 @@
-"""Interactive visual showcase and test application for CTkPopup.
+"""Demo test suite for CTkPopup.
 
-Demonstrates:
-  1. The 5 core presets (Info, Warning, Error, Question, Success)
-  2. The 4 semantic button roles (Primary, Cancel, Destructive, Normal)
-  3. Visual height comparison: Short Label (< 300px) vs Copyable CTkTextbox (> 300px)
-  4. Non-blocking asynchronous callback demonstration
-  5. Multi-button custom prompts (Keep Both / Overwrite / Cancel)
-  6. Live Light/Dark mode theme toggling
+Shows interactive modal popup testing and configuration:
+  - Core presets, semantic button roles, and multi-choice prompts.
+  - Dynamic height scaling from short text to scrollable textboxes.
+  - Asynchronous button callbacks and live theme toggling.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
 """
 
 import customtkinter as ctk
@@ -326,6 +326,7 @@ class DemoApp(ctk.CTk):
 
     def _test_delayed_popup(self) -> None:
         """Launch a popup after a 5-second countdown to verify centering when minimized."""
+
         def _tick(remaining: int) -> None:
             if remaining > 0:
                 self.status_display.configure(
@@ -363,5 +364,5 @@ class DemoApp(ctk.CTk):
 
 if __name__ == "__main__":
     app = DemoApp()
-    enable_debug_mode(app)  # Enables debug mode if the module is imported
+    # enable_debug_mode(app)  # Enables debug mode if the module is imported
     app.mainloop()

@@ -1,8 +1,11 @@
-"""Interactive table demo showcasing sorting, editing, and selection in CustomTkinter.
+"""Demo of CTkTable data table widget in CustomTkinter.
 
-Launches a preconfigured CTkTable with multi-row selection, fixed column
-widths, numeric sorting, and in-place cell editing—giving you a plug-and-play
-reference for tabular data in your desktop apps.
+Launches a preconfigured data table with custom column widths, alternating
+row striping, header sorting, and extended cell selection—providing a clean,
+plug-and-play reference for tabular layouts in CustomTkinter.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
 """
 
 from typing import Any
@@ -68,4 +71,3 @@ def on_closing() -> None:
 
 app.protocol("WM_DELETE_WINDOW", on_closing)
 app.mainloop()
-

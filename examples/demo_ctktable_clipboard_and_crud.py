@@ -1,8 +1,13 @@
-"""Interactive CRUD and clipboard demo managing 50,000 rows in CTkTable.
+"""Demo of advanced CRUD and clipboard features in CTkTable.
 
-Launches a full transaction dashboard with live row insertion and deletion,
-TSV clipboard export with a preview bar, in-place cell editing, and custom
-currency sorting—giving you a production-scale reference for data grids.
+Shows how to manage large tabular datasets in CustomTkinter:
+  - Rendering and scrolling high-volume transaction grids.
+  - Adding, editing, and deleting table rows in place.
+  - Exporting selected cells and rows to the clipboard as TSV.
+  - Sorting formatted data columns like currency and timestamps.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
 """
 
 import tkinter as tk
@@ -410,11 +415,11 @@ class TableDemoApp(ctk.CTk):
         # Keep Total Amount (col 8) synchronized when Quantity (6) or Unit Price (7) changes
         if col in (6, 7):
             try:
-                row_vals = self._table._data_model.values[actual_row]
+                disp_row = self._table.get_display_row_index(actual_row)
+                row_vals = self._table.get_row(disp_row)
                 qty = int(row_vals[6])
                 price = parse_currency(row_vals[7])
                 total = qty * price
-                disp_row = self._table._data_model.get_display_row_index(actual_row)
                 self._table.update_cell(disp_row, 8, f"£{total:,.2f}", notify=False)
             except (ValueError, TypeError, IndexError):
                 pass
@@ -507,7 +512,8 @@ class TableDemoApp(ctk.CTk):
             ctk.set_appearance_mode("Dark")
 
     def _on_closing(self) -> None:
-        """Clean up and close application cleanly."""
+        """Stop the event loop immediately and destroy window resources."""
+        self.quit()
         self.destroy()
 
 

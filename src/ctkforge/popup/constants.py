@@ -15,8 +15,20 @@ DEFAULT_POPUP_WIDTH: int = 478  # Baseline width (floor is ~355px for 2 buttons;
 DEFAULT_WRAPLENGTH: int = 340  # Maximum horizontal wrap boundary for text
 ICON_DISPLAY_SIZE: tuple[int, int] = (64, 64)
 
+# Layout padding tokens
+POPUP_PADDING: int = 8
+CONTENT_PADDING_X: int = 20
+CONTENT_PADDING_Y: tuple[int, int] = (20, 16)
+BUTTON_CONTAINER_PADDING_X: int = 20
+BUTTON_CONTAINER_PADDING_BOTTOM: int = 18
+BUTTON_SPACING: int = 5
+ICON_PADDING_RIGHT: int = 18
+ICON_PADDING_TOP: int = 4
+
 # Styling and typography tokens
 MESSAGE_FONT_SIZE: int = 13
+TEXTBOX_FONT_SIZE: int = 12
+DEFAULT_CORNER_RADIUS: int = 12
 POPUP_BORDER_COLOR: tuple[str, str] = ("gray80", "gray25")
 POPUP_BORDER_WIDTH: int = 1
 # fmt: on
