@@ -1,4 +1,8 @@
-"""CustomTkinter extension components and widgets."""
+"""CustomTkinter extension components and widgets.
+
+Author: Rafalus
+Repository: https://github.com/RafalusWorks/ctkforge
+"""
 
 from ctkforge.debug import (
     DEBUG_BANNER,
@@ -12,11 +16,14 @@ from ctkforge.resources import resource_path
 from ctkforge.spinbox import CTkSpinbox
 from ctkforge.table import CTkTable
 
+__version__ = "0.2.0"
+
 __all__ = [
     "DEBUG_BANNER",
     "CTkPopup",
     "CTkSpinbox",
     "CTkTable",
+    "__version__",
     "enable_debug_mode",
     "is_debug_mode",
     "print_window_telemetry",
