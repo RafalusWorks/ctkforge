@@ -4,20 +4,64 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ctkforge"
-version = "0.1.0"
+version = "0.2.0"
 description = "CustomTkinter extension components and widgets"
 readme = "README.md"
+license = { text = "MIT" }
 authors = [
     { name = "Rafalus" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
+keywords = [
+    "customtkinter",
+    "tkinter",
+    "gui",
+    "widgets",
+    "table",
+    "popup",
+    "dialog",
+    "spinbox",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
+    "Topic :: Software Development :: User Interfaces",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "customtkinter>=6.0.0",
-    "pillow>=12.0.0",
+    "pillow>=10.0.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/RafalusWorks/ctkforge"
+Repository = "https://github.com/RafalusWorks/ctkforge"
+Documentation = "https://github.com/RafalusWorks/ctkforge#readme"
+Issues = "https://github.com/RafalusWorks/ctkforge/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 "*" = ["*.png"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501"]
