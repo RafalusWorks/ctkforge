@@ -238,10 +238,12 @@ CTkPopup(master=app, text="Custom Branding", icon="assets/logo.png").get()
 Pass a `ctk.CTkImage` directly when distinct Light and Dark mode assets are needed:
 ```python
 from PIL import Image
+import customtkinter as ctk
+from ctkforge import CTkPopup, resource_path
 
 custom_icon = ctk.CTkImage(
-    light_image=Image.open("assets/icon_dark.png"),
-    dark_image=Image.open("assets/icon_light.png"),
+    light_image=Image.open(resource_path("assets/icon_dark.png")),
+    dark_image=Image.open(resource_path("assets/icon_light.png")),
     size=(64, 64),
 )
 CTkPopup(master=app, text="Theme-aware icon", icon=custom_icon).get()

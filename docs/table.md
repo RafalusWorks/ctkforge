@@ -1,4 +1,4 @@
-# CTkTable API Reference & Documentation
+# CTkTable API Reference
 
 A fast, modern data table widget for CustomTkinter with built-in sorting, selection, and in-place cell editing.
 
@@ -10,7 +10,7 @@ A fast, modern data table widget for CustomTkinter with built-in sorting, select
 ---
 
 ## Table of Contents
-1. [Quick Import & Initialization](#1-quick-import--initialization)
+1. [Quickstart](#1-quickstart)
 2. [Arguments](#2-arguments)
    - [Widget Frame & Layout](#widget-frame--layout)
    - [Column Headers](#column-headers)
@@ -18,19 +18,19 @@ A fast, modern data table widget for CustomTkinter with built-in sorting, select
    - [Selection & Interaction](#selection--interaction)
    - [In-Place Cell Editing](#in-place-cell-editing)
 3. [Methods](#3-methods)
-   - [Configuration & Inspection (`.configure`, `.cget`)](#configuration--inspection)
+   - [Configuration & Inspection](#configuration--inspection)
    - [Data & Row Operations](#data--row-operations)
    - [Selection Management](#selection-management)
    - [Sorting](#sorting)
    - [Viewport & Navigation](#viewport--navigation)
-   - [In-Place Cell Editing](#in-place-cell-editing)
+   - [Cell Editing Methods](#cell-editing-methods)
    - [Clipboard & Shortcuts](#clipboard--shortcuts)
-   - [Event Binding (`.bind`)](#event-binding)
+   - [Event Binding](#event-binding)
 4. [Read-Only Properties](#4-read-only-properties)
 
 ---
 
-## 1. Quick Import & Initialization
+## 1. Quickstart
 
 ```python
 import customtkinter as ctk
@@ -341,7 +341,7 @@ table.auto_fit_columns([0, 1, 3])  # Fit specific subset of columns
 
 ---
 
-### In-Place Cell Editing
+### Cell Editing Methods
 
 #### `.start_editing(row: int, col: int) -> None`
 Programmatically mounts the floating `CTkEntry` editor over the target cell.

@@ -1,4 +1,4 @@
-# CTkPopup API Reference & Documentation
+# CTkPopup API Reference
 
 A modern, DPI-aware modal dialog and alert popup for CustomTkinter with semantic button roles, automatic scrolling for long messages, and preset themes.
 
@@ -9,7 +9,7 @@ A modern, DPI-aware modal dialog and alert popup for CustomTkinter with semantic
 ---
 
 ## Table of Contents
-1. [Quick Import & Initialization](#1-quick-import--initialization)
+1. [Quickstart](#1-quickstart)
 2. [Arguments](#2-arguments)
    - [Container & Dimensions](#container--dimensions)
    - [Content & Presets](#content--presets)
@@ -21,7 +21,7 @@ A modern, DPI-aware modal dialog and alert popup for CustomTkinter with semantic
 
 ---
 
-## 1. Quick Import & Initialization
+## 1. Quickstart
 
 ```python
 import customtkinter as ctk
@@ -73,7 +73,7 @@ app.mainloop()
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `title` | `str \| None` | `None` | Window title bar text. If omitted, uses the preset title (e.g. `"Warning"` or `"Confirm"`), or `"Alert"`. |
-| `text` | `str` | `""` | The primary prompt or message to display. Follows standard CustomTkinter widget naming conventions (`text`, identical to `CTkLabel` and `CTkButton`). Also accepts `message` as an alias. |
+| `text` | `str` | `""` | The primary prompt or message to display. Also accepts `message` as an alias. |
 | `icon` | `ctk.CTkImage \| str \| Path \| None` | `None` | Stock icon name (`"info"`, `"warning"`, `"error"`, `"question"`, `"success"`), custom image file path, or pre-configured `ctk.CTkImage`. |
 | `preset` | `str \| None` | `None` | Preset template name (`"info"`, `"warning"`, `"error"`, `"question"`, `"success"`). Preconfigures stock icon, default title, semantic button roles, and Enter/Escape keybindings. |
 
@@ -120,7 +120,7 @@ When configuring buttons via full dictionaries (`buttons=[{...}]`), the followin
 
 ## 3. Methods
 
-`CTkPopup` adheres strictly to standard CustomTkinter widget design principles: options are read via `.cget()` and dynamically modified via `.configure()`, with zero arbitrary property setters.
+All options can be updated dynamically via `.configure()` and queried via `.cget()`.
 
 ### Configuration & Inspection
 
