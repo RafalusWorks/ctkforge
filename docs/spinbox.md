@@ -8,7 +8,7 @@ A compact, modern numeric entry widget for CustomTkinter featuring stacked verti
 
 ## Table of Contents
 1. [Quick Import & Initialization](#1-quick-import--initialization)
-2. [Arguments (`__init__`)](#2-arguments-__init__)
+2. [Arguments](#2-arguments)
    - [Widget Dimensions](#widget-dimensions)
    - [Numeric Range & Stepping](#numeric-range--stepping)
    - [Appearance & Theming](#appearance--theming)
@@ -54,7 +54,7 @@ app.mainloop()
 
 ---
 
-## 2. Arguments (`__init__`)
+## 2. Arguments
 
 ### Widget Dimensions
 
