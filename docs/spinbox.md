@@ -1,4 +1,4 @@
-# CTkSpinbox API Reference & Documentation
+# CTkSpinbox API Reference
 
 A compact, modern numeric entry widget for CustomTkinter featuring stacked vertical stepper buttons, keyboard navigation, and mouse wheel scrolling.
 
@@ -7,7 +7,7 @@ A compact, modern numeric entry widget for CustomTkinter featuring stacked verti
 ---
 
 ## Table of Contents
-1. [Quick Import & Initialization](#1-quick-import--initialization)
+1. [Quickstart](#1-quickstart)
 2. [Arguments](#2-arguments)
    - [Widget Dimensions](#widget-dimensions)
    - [Numeric Range & Stepping](#numeric-range--stepping)
@@ -18,7 +18,7 @@ A compact, modern numeric entry widget for CustomTkinter featuring stacked verti
 
 ---
 
-## 1. Quick Import & Initialization
+## 1. Quickstart
 
 ```python
 import customtkinter as ctk

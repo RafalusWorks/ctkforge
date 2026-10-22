@@ -96,10 +96,10 @@ def resolve_icon(
         if stock_img is not None:
             return stock_img
 
-    # Custom image file path (valid file in CWD, _MEIPASS, or sys.argv[0])
+    # Custom image file path (valid file on disk, CWD, _MEIPASS, or sys.argv[0])
     if isinstance(icon_input, (str, Path)):
-        str_path = str(icon_input)
-        resolved_file = resource_path(str_path)
+        path_candidate = Path(icon_input)
+        resolved_file = path_candidate if path_candidate.is_file() else resource_path(str(icon_input))
         if resolved_file is not None and resolved_file.is_file():
             try:
                 return load_image_as_ctk(resolved_file, display_size)
