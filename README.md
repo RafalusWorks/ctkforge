@@ -2,6 +2,10 @@
 
 Custom extension components and widgets for [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter).
 
+[![PyPI version](https://img.shields.io/pypi/v/ctkforge.svg)](https://pypi.org/project/ctkforge/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 ![CTkForge Preview](docs/assets/ctkforge_preview.jpg)
 
 ## Installation
@@ -10,134 +14,23 @@ Custom extension components and widgets for [CustomTkinter](https://github.com/T
 pip install ctkforge
 ```
 
-## Features
+## Components
 
-- **[CTkPopup](docs/popup.md)**: A modern popup modal dialog widget for alerts, confirmations, and error messages. Includes ready-to-use types (info, warning, error, question, success), keyboard shortcuts (Enter to confirm, Escape to cancel), clean Windows 11 button styling, and automatically turns into a scrollable box for long error text. See [detailed documentation](docs/popup.md).
+| Component | Description | Documentation |
+| :--- | :--- | :--- |
+| [**CTkTable**](docs/table.md) | High-performance data table with smart sorting, row/cell selection, cell editing, and clipboard support. | [API Reference](docs/table.md) • [User Guide](docs/table_user_guide.md) |
+| [**CTkPopup**](docs/popup.md) | Modern modal dialogs for alerts, confirmations, and errors with auto-scrolling and keyboard shortcuts. | [API Reference](docs/popup.md) • [User Guide](docs/popup_user_guide.md) |
+| [**CTkSpinbox**](docs/spinbox.md) | Numeric input widget with classic arrow steppers, mouse wheel control, limits, and custom steps. | [API Reference](docs/spinbox.md) |
+| [**Utilities**](docs/utilities.md) | High-DPI screen coordinate unscaling (`unscale`) and PyInstaller asset path resolution (`resource_path`). | [Utilities Reference](docs/utilities.md) |
 
-- **[CTkSpinbox](docs/spinbox.md)**: A number input widget with classic up and down arrow buttons (`▲`/`▼`). Supports mouse wheel scrolling, arrow key adjustments, minimum/maximum limits, custom steps, and matches CustomTkinter's colors and rounded corners. See [detailed documentation](docs/spinbox.md).
+## Interactive Examples
 
-- **[CTkTable](docs/table.md)**: A fast, smooth data table widget built to handle massive datasets without slowing down. Features smart column sorting, row and cell selection, double-click cell editing, copy-pasting (`Ctrl+C`), auto-fitting column widths, and optional alternating row colors. See [API reference](docs/table.md), [user guide](docs/table_user_guide.md).
-- **Universal DPI `unscale` Helper**: Utility function to convert raw physical pixel dimensions from Tkinter (`winfo_*`) back to unscaled 100% baseline (96 DPI) values for CustomTkinter windows.
-- **Resource Locator (`resource_path`)**: Robust asset path resolver that finds images, icons, audio, and data files across direct filesystem paths, the script entry directory (`sys.argv[0]`), and PyInstaller single-file bundle extractions (`sys._MEIPASS`).
+Runnable example scripts are available in the [`examples/`](examples/) folder:
 
-## Usage
-
-### 1. CTkPopup Dialogs
-
-```python
-import customtkinter as ctk
-from ctkforge import CTkPopup
-
-app = ctk.CTk()
-
-# Quick confirmation dialog (Enter for Yes, Escape for No)
-popup = CTkPopup(
-    master=app,
-    title="Confirm Action",
-    text="Do you want to proceed with the update?",
-    preset="question",
-)
-
-choice = popup.get()
-if choice is True:
-    print("User clicked Yes")
-else:
-    print("User clicked No or closed the dialog")
-
-app.mainloop()
-```
-
-*(See [demo_ctkpopup_basic.py](examples/demo_ctkpopup_basic.py), and [demo_ctkpopup_test_suite.py](examples/demo_ctkpopup_test_suite.py) for interactive demos).*
-
-### 2. CTkSpinbox
-
-```python
-import customtkinter as ctk
-from ctkforge import CTkSpinbox
-
-app = ctk.CTk()
-
-spinbox = CTkSpinbox(
-    app,
-    start_value=25,
-    min_value=1,
-    max_value=100,
-    step=1,
-    width=120,
-    height=38,
-)
-spinbox.pack(padx=20, pady=20)
-
-app.mainloop()
-```
-
-*(See [demo_ctkspinbox.py](examples/demo_ctkspinbox.py) for interactive demo).*
-
-### 3. CTkTable Data Grid
-
-```python
-import customtkinter as ctk
-from ctkforge import CTkTable
-
-app = ctk.CTk()
-app.geometry("800x400")
-
-headers = ["ID", "Employee Name", "Department", "Salary"]
-data = [
-    ["101", "Ada Lovelace", "Research", "£125,000"],
-    ["102", "Alan Turing", "Data Systems", "£135,000"],
-    ["103", "Grace Hopper", "Engineering", "£130,000"],
-]
-
-table = CTkTable(
-    app,
-    headers=headers,
-    values=data,
-    column_widths=[90, 220, 180, 140],
-    column_types={0: "int"},
-    selection_target="row",
-    selection_mode="extended",
-    editable=True,
-    alternate_row_color=("gray92", "gray14"),
-)
-table.pack(fill="both", expand=True, padx=20, pady=20)
-
-app.mainloop()
-```
-
-*(See [demo_ctktable_basic.py](examples/demo_ctktable_basic.py), and [demo_ctktable_clipboard_and_crud.py](examples/demo_ctktable_clipboard_and_crud.py) for interactive demos).*
-
-### 4. Universal DPI Unscaling (`unscale`)
-
-Convert raw physical pixel values from Tkinter (`winfo_*`) back to unscaled 100% baseline (96 DPI) values to prevent double-scaling bugs when setting CustomTkinter geometry on High-DPI displays:
-
-```python
-import customtkinter as ctk
-from ctkforge import unscale
-
-app = ctk.CTk()
-app.update_idletasks()
-
-# Unscale multiple physical dimensions simultaneously:
-width, height = unscale(app, app.winfo_width(), app.winfo_height())
-
-# Or unscale a single coordinate:
-root_x = unscale(app, app.winfo_rootx())
-
-# Set window geometry safely without High-DPI drift:
-app.geometry(f"{width}x{height}")
-```
-
-### 5. Resource Path Resolution (`resource_path`)
-
-Find files reliably in both development and PyInstaller single-file executables (`.exe`):
-
-```python
-from ctkforge import resource_path
-
-# Finds asset whether running from terminal, script folder, or PyInstaller bundle
-icon_path = resource_path("assets/custom_icon.png")
-```
+* [`demo_ctktable_basic.py`](examples/demo_ctktable_basic.py) — Table sorting, editing, and selection
+* [`demo_ctkpopup_basic.py`](examples/demo_ctkpopup_basic.py) — Modal dialog presets and result handling
+* [`demo_ctkspinbox.py`](examples/demo_ctkspinbox.py) — Number steppers and styling variations
+* [`demo_ctktable_clipboard_and_crud.py`](examples/demo_ctktable_clipboard_and_crud.py) — Advanced table CRUD and clipboard integration
 
 ---
 
