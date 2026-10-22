@@ -11,7 +11,7 @@ A fast, modern data table widget for CustomTkinter with built-in sorting, select
 
 ## Table of Contents
 1. [Quick Import & Initialization](#1-quick-import--initialization)
-2. [Arguments (`__init__`)](#2-arguments-__init__)
+2. [Arguments](#2-arguments)
    - [Widget Frame & Layout](#widget-frame--layout)
    - [Column Headers](#column-headers)
    - [Dataset, Rows & Columns](#dataset-rows--columns)
@@ -57,7 +57,7 @@ app.mainloop()
 
 ---
 
-## 2. Arguments (`__init__`)
+## 2. Arguments
 
 ### Widget Frame & Layout
 

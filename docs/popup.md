@@ -10,7 +10,7 @@ A modern, DPI-aware modal dialog and alert popup for CustomTkinter with semantic
 
 ## Table of Contents
 1. [Quick Import & Initialization](#1-quick-import--initialization)
-2. [Arguments (`__init__`)](#2-arguments-__init__)
+2. [Arguments](#2-arguments)
    - [Container & Dimensions](#container--dimensions)
    - [Content & Presets](#content--presets)
    - [Button Configuration](#button-configuration)
@@ -56,7 +56,7 @@ app.mainloop()
 
 ---
 
-## 2. Arguments (`__init__`)
+## 2. Arguments
 
 ### Container & Dimensions
 
