@@ -16,7 +16,7 @@ from ctkforge.resources import resource_path
 from ctkforge.spinbox import CTkSpinbox
 from ctkforge.table import CTkTable
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 __all__ = [
     "DEBUG_BANNER",

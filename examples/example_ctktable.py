@@ -21,7 +21,13 @@ table = CTkTable(
         [2, "Alan Turing", "Cryptanalyst", "£135,000"],
         [3, "Grace Hopper", "Computer Scientist", "£130,000"],
     ],
-    editable={"default": True, 0: False},
+    selection_mode="extended",
+    editable=True,
+    justify={"default": "left", 0: "center", 3: "right"},
+    font={1: "bold"},
+    text_color={3: "#2ecc71"},
+    header_alignment="center",
+    header_hover_color=("#3a7ebf", "#1f538d"),
 )
 table.pack(fill="both", expand=True, padx=20, pady=20)
 

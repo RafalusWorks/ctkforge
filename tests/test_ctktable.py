@@ -441,5 +441,79 @@ def test_ctktable() -> None:
     run_headless_tests()
 
 
+def test_theme_color_pair_not_unpacked_as_columns() -> None:
+    """Verify that 2-element theme color lists are not unpacked as per-column colors."""
+    ctk.set_appearance_mode("Dark")
+    root = ctk.CTk()
+    root.geometry("400x300+9999+9999")
+    table = CTkTable(root, headers=["ID", "Name"], values=[[1, "Alice"]])
+    table.pack()
+    root.update()
+
+    assert table._cached_col_text_colors == {}
+    assert table._cached_header_text_colors == {}
+
+    header_fills = [
+        table._header_canvas.itemcget(item, "fill")
+        for item in table._header_canvas.find_all()
+        if table._header_canvas.type(item) == "text"
+    ]
+    assert header_fills == ["#DCE4EE", "#DCE4EE"]
+
+    body_fills = [
+        table._table_canvas.itemcget(item, "fill")
+        for item in table._table_canvas.find_all()
+        if table._table_canvas.type(item) == "text"
+    ]
+    assert body_fills == ["#DCE4EE", "#DCE4EE"]
+    root.destroy()
+
+
+def test_column_color_dict_styling() -> None:
+    """Verify dictionary-based column color overrides with default declared first."""
+    ctk.set_appearance_mode("Dark")
+    root = ctk.CTk()
+    root.geometry("400x300+9999+9999")
+    table = CTkTable(
+        root,
+        headers=["ID", "Status"],
+        values=[[101, "Active"]],
+        text_color={"default": ("gray10", "#DCE4EE"), 1: "#2ecc71"},
+        header_text_color={"default": ("gray10", "#DCE4EE"), 1: "#3a7ebf"},
+    )
+    table.pack()
+    root.update()
+
+    header_text_items = [
+        (table._header_canvas.itemcget(i, "text"), table._header_canvas.itemcget(i, "fill"))
+        for i in table._header_canvas.find_all()
+        if table._header_canvas.type(i) == "text"
+    ]
+    assert ("ID", "#DCE4EE") in header_text_items
+    assert ("Status", "#3a7ebf") in header_text_items
+
+    body_text_items = [
+        (table._table_canvas.itemcget(i, "text"), table._table_canvas.itemcget(i, "fill"))
+        for i in table._table_canvas.find_all()
+        if table._table_canvas.type(i) == "text"
+    ]
+    assert ("101", "#DCE4EE") in body_text_items
+    assert ("Active", "#2ecc71") in body_text_items
+
+    ctk.set_appearance_mode("Light")
+    root.update()
+
+    light_body_items = [
+        (table._table_canvas.itemcget(i, "text"), table._table_canvas.itemcget(i, "fill"))
+        for i in table._table_canvas.find_all()
+        if table._table_canvas.type(i) == "text"
+    ]
+    assert ("101", "gray10") in light_body_items
+    assert ("Active", "#2ecc71") in light_body_items
+
+    root.destroy()
+    ctk.set_appearance_mode("Dark")
+
+
 if __name__ == "__main__":
     run_headless_tests()

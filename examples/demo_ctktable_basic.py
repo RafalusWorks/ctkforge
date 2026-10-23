@@ -24,18 +24,18 @@ app.minsize(600, 300)
 
 headers = ["ID", "Employee Name", "Department", "Salary"]
 values: list[list[Any]] = [
-    ["EMP-101", "Ada Lovelace", "Research", "$125,000"],
-    ["EMP-102", "Alan Turing", "Data Systems", "$135,000"],
-    ["EMP-103", "Grace Hopper", "Engineering", "$130,000"],
-    ["EMP-104", "Claude Shannon", "Information Theory", "$140,000"],
-    ["EMP-105", "Margaret Hamilton", "Infrastructure", "$138,000"],
-    ["EMP-106", "John von Neumann", "Applied Math", "$145,000"],
-    ["EMP-107", "Donald Knuth", "Algorithms", "$150,000"],
-    ["EMP-108", "Katherine Johnson", "Orbital Mechanics", "$142,000"],
-    ["EMP-109", "Dennis Ritchie", "Systems Architecture", "$148,000"],
-    ["EMP-110", "Ken Thompson", "Core Computing", "$146,000"],
-    ["EMP-111", "Barbara Liskov", "Software Methodology", "$144,000"],
-    ["EMP-112", "Edsger Dijkstra", "Formal Verification", "$139,000"],
+    ["EMP-101", "Ada Lovelace", "Research", "£125,000"],
+    ["EMP-102", "Alan Turing", "Data Systems", "£135,000"],
+    ["EMP-103", "Grace Hopper", "Engineering", "£130,000"],
+    ["EMP-104", "Claude Shannon", "Information Theory", "£140,000"],
+    ["EMP-105", "Margaret Hamilton", "Infrastructure", "£138,000"],
+    ["EMP-106", "John von Neumann", "Applied Math", "£145,000"],
+    ["EMP-107", "Donald Knuth", "Algorithms", "£150,000"],
+    ["EMP-108", "Katherine Johnson", "Orbital Mechanics", "£142,000"],
+    ["EMP-109", "Dennis Ritchie", "Systems Architecture", "£148,000"],
+    ["EMP-110", "Ken Thompson", "Core Computing", "£146,000"],
+    ["EMP-111", "Barbara Liskov", "Software Methodology", "£144,000"],
+    ["EMP-112", "Edsger Dijkstra", "Formal Verification", "£139,000"],
 ]
 
 
@@ -54,7 +54,7 @@ table = CTkTable(
     corner_radius=5,
     border_width=1,
     editable={1: True},
-    header_sortable={0: False, 3: False},
+    header_sortable={3: False},
 )
 # fmt: on
 

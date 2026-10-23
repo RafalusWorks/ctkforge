@@ -43,18 +43,17 @@ table = CTkTable(
     app,
     headers=["ID", "Name", "Role", "Salary"],
     values=[
-        [1, "Ada Lovelace", "Mathematician", "$120,000"],
-        [2, "Alan Turing", "Cryptanalyst", "$135,000"],
-        [3, "Grace Hopper", "Computer Scientist", "$130,000"],
+        [1, "Ada Lovelace", "Mathematician", "£120,000"],
+        [2, "Alan Turing", "Cryptanalyst", "£135,000"],
+        [3, "Grace Hopper", "Computer Scientist", "£130,000"],
     ],
     selection_mode="extended",
     editable=True,
-    # Column styling and header hover:
-    justify={"default": "left", 0: "center", 3: "right"},  # Center ID, right-align Salary
-    font={1: "bold"},  # Bold font shortcut for Name
-    text_color={3: "#2ecc71"},  # Custom text color for Salary
-    header_alignment="center",  # Center all header titles
-    header_hover_color=("#3a7ebf", "#1f538d"),  # Tint sortable headers on hover
+    justify={"default": "left", 0: "center", 3: "right"},
+    font={1: "bold"},
+    text_color={3: "#2ecc71"},
+    header_alignment="center",
+    header_hover_color=("#3a7ebf", "#1f538d"),
 )
 table.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -64,6 +63,9 @@ app.mainloop()
 ---
 
 ## 2. Arguments
+
+> [!NOTE]
+> All color parameters accept either a single hex/color string (used in all modes) or a `(light_mode_color, dark_mode_color)` tuple.
 
 ### Widget Frame & Layout
 
@@ -75,8 +77,8 @@ app.mainloop()
 | `corner_radius` | `int \| None` | `None` | Rounds the outer frame and the top corners of the header. Defaults to theme frame radius. |
 | `border_width` | `int \| None` | `None` | Outer table border line thickness. Defaults to theme frame border width. |
 | `border_spacing` | `int` | `5` | Inner padding between the table border and the cells. |
-| `fg_color` | `str \| tuple \| None` | `None` | Background color for the table container. Defaults to theme frame color. |
-| `border_color` | `str \| tuple \| None` | `None` | Border color for the table container. Defaults to theme frame border color. |
+| `fg_color` | `str \| tuple[str, str] \| None` | `None` | Background color for the table container (single color or `(light, dark)` tuple). Defaults to theme frame color. |
+| `border_color` | `str \| tuple[str, str] \| None` | `None` | Border color for the table container (single color or `(light, dark)` tuple). Defaults to theme frame border color. |
 
 ### Column Headers
 
@@ -84,11 +86,11 @@ app.mainloop()
 | :--- | :--- | :--- | :--- |
 | `headers` | `list[str] \| None` | `None` | List of column header titles. When `None`, the top header bar is omitted. |
 | `header_height` | `int` | `32` | Height of the top pinned header in logical pixels (minimum 20). |
-| `header_fg_color` | `str \| tuple \| None` | `None` | Background fill color for the pinned column header bar. Defaults to theme top frame color (`theme["CTkFrame"]["top_fg_color"]`). |
-| `header_text_color` | `str \| tuple \| dict \| list \| None` | `None` | Text color for column header titles. Accepts a color for all headers, or a dict/list for per-header overrides (e.g. `{"default": "#3B8ED0", 3: "#E06C75"}`). Defaults to theme label text color. |
-| `header_font` | `tuple \| CTkFont \| dict \| list \| None` | `None` | Font for column headers. Accepts a font tuple, `CTkFont`, or a dict/list for per-header overrides (with optional `"default"` key). Also accepts shortcuts (`"bold"`, `"italic"`, `"bold italic"`). Defaults to active theme bold font (`CTkFont(weight="bold")`). |
-| `header_hover_color` | `str \| tuple \| None` | `None` | Hover tint for sortable column headers. When `None` (default), hover effect is disabled. |
-| `header_alignment` | `str \| dict \| list` | `"left"` | Alignment of header titles (`"left"`, `"center"`, `"right"`). Accepts a single string to format all headers, or a dict/list for per-header overrides (with optional `"default"` key). |
+| `header_fg_color` | `str \| tuple[str, str] \| None` | `None` | Background fill color for the pinned column header bar (single color or `(light, dark)` tuple). Defaults to theme top frame color (`theme["CTkFrame"]["top_fg_color"]`). |
+| `header_text_color` | `str \| tuple[str, str] \| dict \| None` | `None` | Text color for column header titles. Accepts a single color, a `(light, dark)` tuple for all headers, or a dict for per-header overrides (e.g. `{"default": "#3B8ED0", 3: "#E06C75"}`). Defaults to theme label text color. |
+| `header_font` | `tuple \| CTkFont \| str \| dict \| None` | `None` | Font for column headers. Accepts a font tuple, `CTkFont`, or a dict for per-header overrides (with optional `"default"` key). Also accepts shortcuts (`"bold"`, `"italic"`, `"bold italic"`). Defaults to active theme bold font (`CTkFont(weight="bold")`). |
+| `header_hover_color` | `str \| tuple[str, str] \| None` | `None` | Hover tint for sortable column headers (single color or `(light, dark)` tuple). When `None` (default), hover effect is disabled. |
+| `header_alignment` | `str \| dict` | `"left"` | Alignment of header titles (`"left"`, `"center"`, `"right"`). Accepts a single string to format all headers, or a dict for per-header overrides (with optional `"default"` key). |
 | `header_sortable` | `bool \| dict[int \| str, bool]` | `True` | Column header click sorting control. Accepts a boolean for all columns (e.g. `False` to lock all), or a dict for per-header control (e.g. `{0: False}` to disable sorting on column 0, or `{"default": False, 2: True}` to only permit sorting on column 2). If `"default"` is omitted in reconfigures, the active baseline is preserved. |
 
 ### Dataset, Rows & Columns
@@ -98,12 +100,12 @@ app.mainloop()
 | `values` | `list[list[Any]] \| None` | `None` | 2D list of row records representing the dataset. |
 | `column_widths` | `list[int] \| dict[int, int] \| None` | `None` | Widths in pixels for each column. When `None`, columns share available width equally. |
 | `sort_key` | `str \| Callable \| dict \| None` | `None` | Key for column sorting (`"str"`, `"int"`, `"float"`, `"date"`, or any custom `Callable`). Accepts a single key to format all columns, or a dict for per-column overrides (e.g. `{"default": "str", 0: "int", 3: my_key}`). Default is `"str"`. |
-| `justify` | `str \| dict \| list \| None` | `None` | Body cell text alignment (`"left"`, `"center"`, `"right"`). Accepts a single string (e.g. `"center"`) or a dict/list (e.g. `{"default": "left", 3: "right"}`). Default is `"left"`. |
-| `text_color` | `str \| tuple \| dict \| list \| None` | `None` | Cell text color. Accepts a color for all cells, or a dict/list for per-column overrides (e.g. `{"default": "#ffffff", 3: "#2ecc71"}`). Defaults to theme label text color. |
-| `font` | `tuple \| CTkFont \| dict \| list \| None` | `None` | Font for table body cells. Accepts a font tuple, `CTkFont`, or a dict/list for per-column overrides (with optional `"default"` key). Also accepts shortcuts (`"bold"`, `"italic"`, `"bold italic"`). Defaults to active theme font (`CTkFont()`). |
+| `justify` | `str \| dict \| None` | `None` | Body cell text alignment (`"left"`, `"center"`, `"right"`). Accepts a single string (e.g. `"center"`) or a dict (e.g. `{"default": "left", 3: "right"}`). Default is `"left"`. |
+| `text_color` | `str \| tuple[str, str] \| dict \| None` | `None` | Cell text color. Accepts a single color, a `(light, dark)` tuple for all cells, or a dict for per-column overrides (e.g. `{"default": ("gray10", "#DCE4EE"), 3: "#2ecc71"}`). Defaults to theme label text color. |
+| `font` | `tuple \| CTkFont \| str \| dict \| None` | `None` | Font for table body cells. Accepts a font tuple, `CTkFont`, or a dict for per-column overrides (with optional `"default"` key). Also accepts shortcuts (`"bold"`, `"italic"`, `"bold italic"`). Defaults to active theme font (`CTkFont()`). |
 | `row_height` | `int` | `28` | Height of each body row in logical pixels (minimum 16). |
-| `row_color` | `str \| tuple \| None` | `None` | Base row background color. Defaults to container `fg_color` (uniform flat look). |
-| `alternate_row_color` | `str \| tuple \| None` | `None` | Odd row background color for opt-in zebra striping. Defaults to `None` (matches `row_color`, no striping). |
+| `row_color` | `str \| tuple[str, str] \| None` | `None` | Base row background color (single color or `(light, dark)` tuple). Defaults to container `fg_color` (uniform flat look). |
+| `alternate_row_color` | `str \| tuple[str, str] \| None` | `None` | Odd row background color for opt-in zebra striping (single color or `(light, dark)` tuple). Defaults to `None` (matches `row_color`, no striping). |
 
 ### Selection & Interaction
 
@@ -111,8 +113,8 @@ app.mainloop()
 | :--- | :--- | :--- | :--- |
 | `selection_target` | `str` | `"row"` | What gets highlighted on click: `"row"` (entire line) or `"cell"` (individual box). |
 | `selection_mode` | `str` | `"single"` | Selection behavior: `"single"` (one item), `"extended"` (Shift/Ctrl range & multi-select), or `"none"` (disabled). |
-| `selected_color` | `str \| tuple \| None` | `None` | Highlight fill color for selected items. Defaults to active theme button color. |
-| `selected_text_color` | `str \| tuple \| None` | `None` | Text color for selected items. Defaults to active theme button text color. |
+| `selected_color` | `str \| tuple[str, str] \| None` | `None` | Highlight fill color for selected items (single color or `(light, dark)` tuple). Defaults to active theme button color. |
+| `selected_text_color` | `str \| tuple[str, str] \| None` | `None` | Text color for selected items (single color or `(light, dark)` tuple). Defaults to active theme button text color. |
 | `command` | `Callable \| None` | `None` | Callback fired whenever selection changes: `def on_select(items): ...` |
 | `copyable` | `bool` | `False` | Master toggle for interactive `Ctrl+C` clipboard copying. Disabled by default. |
 
