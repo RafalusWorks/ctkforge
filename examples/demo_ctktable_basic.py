@@ -45,7 +45,7 @@ table = CTkTable(
     headers=headers,
     values=values,
     column_widths=[90, 200, 180], # Column widths: ID=90px, Name=200px, Dept=180px, Salary auto-fills remaining space
-    column_types={0: "int"},  # Numeric sorting enabled on the ID column
+    sort_key={0: "int"},  # Numeric sorting enabled on the ID column
     selection_target="cell",
     selection_mode="extended",  # Row selection mode (extended allows multi-select with Ctrl/Shift)
     row_height=30,
@@ -53,10 +53,8 @@ table = CTkTable(
     alternate_row_color=("gray92", "gray14"),
     corner_radius=5,
     border_width=1,
-    editable=False,  
-    editable_columns_exclude=[1],
-    header_sortable=True,
-    header_sortable_exclude=[0,3],
+    editable={1: True},
+    header_sortable={0: False, 3: False},
 )
 # fmt: on
 

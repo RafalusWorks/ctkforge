@@ -11,7 +11,7 @@ Repository: https://github.com/RafalusWorks/ctkforge
 
 import customtkinter as ctk
 
-from ctkforge import CTkPopup, enable_debug_mode
+from ctkforge import CTkPopup
 
 SAMPLE_TRACEBACK = """Traceback (most recent call last):
   File "C:\\Projects\\App\\database\\engine.py", line 142, in connect

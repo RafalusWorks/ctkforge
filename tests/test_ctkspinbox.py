@@ -1,9 +1,6 @@
-"""Comprehensive test and demonstration script for CTkSpinbox."""
+"""Comprehensive automated test suite for CTkSpinbox."""
 
 from __future__ import annotations
-
-import sys
-import time
 
 import customtkinter as ctk
 
@@ -13,15 +10,11 @@ from ctkforge import CTkSpinbox
 def run_spinbox_test_suite(
     spinbox: CTkSpinbox,
     root: ctk.CTk,
-    visual: bool = False,
 ) -> None:
-    """Execute all 16 automated tests on a spinbox instance (headless or live in-window)."""
+    """Execute all 16 automated tests on a spinbox instance."""
 
-    def step(delay: float = 0.25) -> None:
-        """Pause briefly during visual runs so the user can follow along."""
-        if visual:
-            root.update()
-            time.sleep(delay)
+    def step() -> None:
+        root.update()
 
     def clean_slate_reset() -> None:
         """Reset the spinbox to its baseline state."""
@@ -243,153 +236,15 @@ def run_headless_tests() -> None:
     spinbox.pack(padx=20, pady=20)
     root.update()
 
-    run_spinbox_test_suite(spinbox, root, visual=False)
-
+    run_spinbox_test_suite(spinbox, root)
     root.destroy()
     print("All automated checks (16/16) passed successfully!")
 
 
-def launch_interactive_demo() -> None:
-    """Launch interactive window for visual inspection and in-window self-testing."""
-    ctk.set_appearance_mode("Dark")
-    ctk.set_default_color_theme("blue")
-
-    root = ctk.CTk()
-    root.title("CTkSpinbox Interactive Test Demo")
-    root.geometry("640x480")
-    root.minsize(500, 380)
-
-    title_label = ctk.CTkLabel(
-        root,
-        text="CTkSpinbox Verification Demo",
-        font=ctk.CTkFont(size=20, weight="bold"),
-    )
-    title_label.pack(pady=(18, 6))
-
-    subtitle_label = ctk.CTkLabel(
-        root,
-        text="Interactive testing and real-time regression verification suite",
-        font=ctk.CTkFont(size=12, slant="italic"),
-        text_color="gray70",
-    )
-    subtitle_label.pack(pady=(0, 16))
-
-    status_var = ctk.StringVar(value="Status: Ready. Use buttons or click Run Self-Test.")
-
-    card_frame = ctk.CTkFrame(root, corner_radius=12)
-    card_frame.pack(fill="x", padx=30, pady=10)
-
-    center_container = ctk.CTkFrame(card_frame, fg_color="transparent")
-    center_container.pack(pady=20)
-
-    spinbox_label = ctk.CTkLabel(
-        center_container,
-        text="Quantity:",
-        font=ctk.CTkFont(size=14, weight="bold"),
-    )
-    spinbox_label.pack(side="left", padx=(0, 12))
-
-    def on_spinbox_change(val: int) -> None:
-        """Update the status label whenever the spinbox changes."""
-        status_var.set(f"Status: Value updated to {val}")
-
-    spinbox = CTkSpinbox(
-        center_container,
-        start_value=25,
-        min_value=0,
-        max_value=100,
-        step=5,
-        width=110,
-        height=32,
-        command=on_spinbox_change,
-    )
-    spinbox.pack(side="left")
-
-    ctrl_frame = ctk.CTkFrame(root)
-    ctrl_frame.pack(fill="x", padx=30, pady=(10, 10))
-
-    def step_up_action() -> None:
-        """Step the spinbox up once."""
-        spinbox._increment()
-
-    def step_down_action() -> None:
-        """Step the spinbox down once."""
-        spinbox._decrement()
-
-    def set_to_min() -> None:
-        """Set the spinbox to its minimum value."""
-        spinbox.set(spinbox.min_value)
-
-    def set_to_max() -> None:
-        """Set the spinbox to its maximum value."""
-        spinbox.set(spinbox.max_value)
-
-    def toggle_state() -> None:
-        """Toggle between enabled and disabled states."""
-        current = spinbox.cget("state")
-        new_state = "disabled" if current == "normal" else "normal"
-        spinbox.configure(state=new_state)
-        btn_state.configure(text="Enable" if new_state == "disabled" else "Disable")
-        status_var.set(f"Status: Widget state set to {new_state}")
-
-    ctk.CTkButton(ctrl_frame, text="▲ Step Up", width=90, command=step_up_action).pack(
-        side="left", padx=5, pady=6
-    )
-    ctk.CTkButton(ctrl_frame, text="▼ Step Down", width=90, command=step_down_action).pack(
-        side="left", padx=5, pady=6
-    )
-    ctk.CTkButton(ctrl_frame, text="Set Min", width=80, command=set_to_min).pack(
-        side="left", padx=5, pady=6
-    )
-    ctk.CTkButton(ctrl_frame, text="Set Max", width=80, command=set_to_max).pack(
-        side="left", padx=5, pady=6
-    )
-    btn_state = ctk.CTkButton(
-        ctrl_frame, text="Disable", width=80, command=toggle_state
-    )
-    btn_state.pack(side="left", padx=5, pady=6)
-
-    def run_in_window_self_test() -> None:
-        """Run all 16 self-tests with visual updates in the window."""
-        status_var.set("Status: Running in-window self-test (16 checks)...")
-        btn_self_test.configure(state="disabled")
-        root.update()
-        try:
-            run_spinbox_test_suite(spinbox, root, visual=True)
-            status_var.set("Status: All 16 automated checks passed! Baseline restored.")
-        finally:
-            btn_self_test.configure(state="normal")
-
-    btn_self_test = ctk.CTkButton(
-        root,
-        text="Run Self-Test (16 Checks)",
-        command=run_in_window_self_test,
-        fg_color="#2b7a4b",
-        hover_color="#1e5c37",
-        height=36,
-        font=ctk.CTkFont(size=13, weight="bold"),
-    )
-    btn_self_test.pack(fill="x", padx=30, pady=(6, 12))
-
-    status_bar = ctk.CTkLabel(
-        root,
-        textvariable=status_var,
-        anchor="w",
-        font=ctk.CTkFont(size=12),
-    )
-    status_bar.pack(fill="x", padx=35, pady=(0, 12))
-
-    def on_closing() -> None:
-        """Close the window gracefully."""
-        root.quit()
-        root.destroy()
-
-    root.protocol("WM_DELETE_WINDOW", on_closing)
-    root.mainloop()
+def test_ctkspinbox() -> None:
+    """Entry point for automated pytest test runner discovery."""
+    run_headless_tests()
 
 
 if __name__ == "__main__":
-    if "--test" in sys.argv or "--headless" in sys.argv:
-        run_headless_tests()
-    else:
-        launch_interactive_demo()
+    run_headless_tests()

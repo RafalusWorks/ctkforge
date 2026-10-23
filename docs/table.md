@@ -49,6 +49,12 @@ table = CTkTable(
     ],
     selection_mode="extended",
     editable=True,
+    # Column styling and header hover:
+    justify={"default": "left", 0: "center", 3: "right"},  # Center ID, right-align Salary
+    font={1: "bold"},  # Bold font shortcut for Name
+    text_color={3: "#2ecc71"},  # Custom text color for Salary
+    header_alignment="center",  # Center all header titles
+    header_hover_color=("#3a7ebf", "#1f538d"),  # Tint sortable headers on hover
 )
 table.pack(fill="both", expand=True, padx=20, pady=20)
 
@@ -79,10 +85,11 @@ app.mainloop()
 | `headers` | `list[str] \| None` | `None` | List of column header titles. When `None`, the top header bar is omitted. |
 | `header_height` | `int` | `32` | Height of the top pinned header in logical pixels (minimum 20). |
 | `header_fg_color` | `str \| tuple \| None` | `None` | Background fill color for the pinned column header bar. Defaults to theme top frame color (`theme["CTkFrame"]["top_fg_color"]`). |
-| `header_text_color` | `str \| tuple \| None` | `None` | Text color for column header titles. Defaults to theme label text color. |
-| `header_font` | `tuple \| CTkFont \| None` | `None` | Font for column headers. Defaults to active theme bold font (`CTkFont(weight="bold")`). |
-| `header_sortable` | `bool` | `True` | Global toggle for interactive column header click sorting. When `False`, programmatic sorting via `.sort_by()` still works. |
-| `header_sortable_exclude` | `list[int] \| None` | `None` | List of column numbers excluded from the `header_sortable` base rule. If `header_sortable=True`, excludes are disabled. If `header_sortable=False`, excludes are enabled. |
+| `header_text_color` | `str \| tuple \| dict \| list \| None` | `None` | Text color for column header titles. Accepts a color for all headers, or a dict/list for per-header overrides (e.g. `{"default": "#3B8ED0", 3: "#E06C75"}`). Defaults to theme label text color. |
+| `header_font` | `tuple \| CTkFont \| dict \| list \| None` | `None` | Font for column headers. Accepts a font tuple, `CTkFont`, or a dict/list for per-header overrides (with optional `"default"` key). Also accepts shortcuts (`"bold"`, `"italic"`, `"bold italic"`). Defaults to active theme bold font (`CTkFont(weight="bold")`). |
+| `header_hover_color` | `str \| tuple \| None` | `None` | Hover tint for sortable column headers. When `None` (default), hover effect is disabled. |
+| `header_alignment` | `str \| dict \| list` | `"left"` | Alignment of header titles (`"left"`, `"center"`, `"right"`). Accepts a single string to format all headers, or a dict/list for per-header overrides (with optional `"default"` key). |
+| `header_sortable` | `bool \| dict[int \| str, bool]` | `True` | Column header click sorting control. Accepts a boolean for all columns (e.g. `False` to lock all), or a dict for per-header control (e.g. `{0: False}` to disable sorting on column 0, or `{"default": False, 2: True}` to only permit sorting on column 2). If `"default"` is omitted in reconfigures, the active baseline is preserved. |
 
 ### Dataset, Rows & Columns
 
@@ -90,10 +97,10 @@ app.mainloop()
 | :--- | :--- | :--- | :--- |
 | `values` | `list[list[Any]] \| None` | `None` | 2D list of row records representing the dataset. |
 | `column_widths` | `list[int] \| dict[int, int] \| None` | `None` | Widths in pixels for each column. When `None`, columns share available width equally. |
-| `column_types` | `list[str] \| dict[int, str] \| None` | `None` | Data types for sorting (`"str"`, `"int"`, `"float"`, `"date"`). Defaults to case-insensitive `"str"` sorting. |
-| `column_sort_keys` | `dict[int, Callable] \| None` | `None` | Custom transformation functions for sorting, e.g. `{3: parse_currency}`. |
-| `text_color` | `str \| tuple \| None` | `None` | Default cell text color. Defaults to theme label text color. |
-| `font` | `tuple \| CTkFont \| None` | `None` | Font for table body cells. Defaults to active theme font (`CTkFont()`). |
+| `sort_key` | `str \| Callable \| dict \| None` | `None` | Key for column sorting (`"str"`, `"int"`, `"float"`, `"date"`, or any custom `Callable`). Accepts a single key to format all columns, or a dict for per-column overrides (e.g. `{"default": "str", 0: "int", 3: my_key}`). Default is `"str"`. |
+| `justify` | `str \| dict \| list \| None` | `None` | Body cell text alignment (`"left"`, `"center"`, `"right"`). Accepts a single string (e.g. `"center"`) or a dict/list (e.g. `{"default": "left", 3: "right"}`). Default is `"left"`. |
+| `text_color` | `str \| tuple \| dict \| list \| None` | `None` | Cell text color. Accepts a color for all cells, or a dict/list for per-column overrides (e.g. `{"default": "#ffffff", 3: "#2ecc71"}`). Defaults to theme label text color. |
+| `font` | `tuple \| CTkFont \| dict \| list \| None` | `None` | Font for table body cells. Accepts a font tuple, `CTkFont`, or a dict/list for per-column overrides (with optional `"default"` key). Also accepts shortcuts (`"bold"`, `"italic"`, `"bold italic"`). Defaults to active theme font (`CTkFont()`). |
 | `row_height` | `int` | `28` | Height of each body row in logical pixels (minimum 16). |
 | `row_color` | `str \| tuple \| None` | `None` | Base row background color. Defaults to container `fg_color` (uniform flat look). |
 | `alternate_row_color` | `str \| tuple \| None` | `None` | Odd row background color for opt-in zebra striping. Defaults to `None` (matches `row_color`, no striping). |
@@ -113,8 +120,7 @@ app.mainloop()
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `editable` | `bool` | `False` | Master toggle for in-place cell editing. Disabled by default. |
-| `editable_columns_exclude` | `list[int] \| None` | `None` | List of column numbers excluded from the `editable` base rule. If `editable=True`, excludes are locked. If `editable=False`, excludes are editable. |
+| `editable` | `bool \| dict[int \| str, bool]` | `False` | In-place cell editing control. Accepts a boolean for the whole table (e.g. `True`), or a dict for per-column control (e.g. `{"default": True, 0: False}` to lock column 0, or `{2: True}` to only permit editing column 2). If `"default"` is omitted in reconfigures, the active baseline is preserved. |
 | `on_cell_edit` | `Callable \| None` | `None` | Callback fired on edit commit: `def on_edit(actual_row, col, old_val, new_val): ...` |
 
 
