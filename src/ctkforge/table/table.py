@@ -61,17 +61,12 @@ class CTkTable(ctk.CTkFrame):
         headers: list[str] | None = None,
         header_height: int = DEFAULT_HEADER_HEIGHT,
         header_fg_color: str | tuple[str, str] | None = None,
-        header_text_color: str
-        | tuple[str, str]
-        | dict[int | str, str | tuple[str, str]]
-        | list[str | tuple[str, str]]
-        | None = None,
-        header_font: tuple[str, int] | ctk.CTkFont | dict[int | str, Any] | list[Any] | None = None,
+        header_text_color: str | tuple[str, str] | dict[int | str, str | tuple[str, str]] | None = None,
+        header_font: tuple[str, int] | ctk.CTkFont | str | dict[int | str, Any] | None = None,
         header_sortable: bool | dict[int | str, bool] = True,
         header_hover_color: str | tuple[str, str] | None = None,
         header_alignment: Literal["left", "center", "right"]
-        | dict[int | str, Literal["left", "center", "right"]]
-        | list[Literal["left", "center", "right"]] = "left",
+        | dict[int | str, Literal["left", "center", "right"]] = "left",
         # Dataset, Rows & Columns
         values: list[list[Any]] | None = None,
         column_widths: list[int] | dict[int, int] | None = None,
@@ -79,16 +74,9 @@ class CTkTable(ctk.CTkFrame):
         | Callable[[Any], Any]
         | dict[int | str, Literal["str", "int", "float", "date"] | Callable[[Any], Any]]
         | None = None,
-        justify: Literal["left", "center", "right"]
-        | dict[int | str, Literal["left", "center", "right"]]
-        | list[Literal["left", "center", "right"]]
-        | None = None,
-        text_color: str
-        | tuple[str, str]
-        | dict[int | str, str | tuple[str, str]]
-        | list[str | tuple[str, str]]
-        | None = None,
-        font: tuple[str, int] | ctk.CTkFont | dict[int | str, Any] | list[Any] | None = None,
+        justify: Literal["left", "center", "right"] | dict[int | str, Literal["left", "center", "right"]] | None = None,
+        text_color: str | tuple[str, str] | dict[int | str, str | tuple[str, str]] | None = None,
+        font: tuple[str, int] | ctk.CTkFont | str | dict[int | str, Any] | None = None,
         row_height: int = DEFAULT_ROW_HEIGHT,
         row_color: str | tuple[str, str] | None = None,
         alternate_row_color: str | tuple[str, str] | None = None,
@@ -170,8 +158,8 @@ class CTkTable(ctk.CTkFrame):
         self._header_font: tuple[str, int] | ctk.CTkFont = (
             ctk.CTkFont(weight="bold") if header_font is None else header_font
         )
-        self._text_color: str | tuple[str, str] = theme["CTkLabel"]["text_color"] if text_color is None else text_color
-        self._header_text_color: str | tuple[str, str] = (
+        self._text_color: Any = theme["CTkLabel"]["text_color"] if text_color is None else text_color
+        self._header_text_color: Any = (
             theme["CTkLabel"]["text_color"] if header_text_color is None else header_text_color
         )
         self._selected_color: str | tuple[str, str] = (
@@ -308,16 +296,12 @@ class CTkTable(ctk.CTkFrame):
         default_text_color = self._text_color
         if isinstance(self._text_color, dict):
             default_text_color = self._text_color.get("default", ctk.ThemeManager.theme["CTkLabel"]["text_color"])
-        elif isinstance(self._text_color, list):
-            default_text_color = ctk.ThemeManager.theme["CTkLabel"]["text_color"]
 
         default_header_text_color = self._header_text_color
         if isinstance(self._header_text_color, dict):
             default_header_text_color = self._header_text_color.get(
                 "default", ctk.ThemeManager.theme["CTkLabel"]["text_color"]
             )
-        elif isinstance(self._header_text_color, list):
-            default_header_text_color = ctk.ThemeManager.theme["CTkLabel"]["text_color"]
 
         self._cached_colors = {
             "header_fg": self._resolve_color(self._header_fg_color),
@@ -417,12 +401,6 @@ class CTkTable(ctk.CTkFrame):
             align = attr.lower()
             if align in ("left", "center", "right"):
                 return {c: align for c in range(total_cols)}
-        if isinstance(attr, list):
-            return {
-                i: v.lower()
-                for i, v in enumerate(attr)
-                if isinstance(v, str) and v.lower() in ("left", "center", "right")
-            }
         if isinstance(attr, dict):
             default_align = str(attr.get("default", "left")).lower()
             res = {}
@@ -440,12 +418,6 @@ class CTkTable(ctk.CTkFrame):
             align = self._header_alignment.lower()
             if align in ("left", "center", "right"):
                 return {c: align for c in range(total_cols)}
-        if isinstance(self._header_alignment, list):
-            return {
-                i: v.lower()
-                for i, v in enumerate(self._header_alignment)
-                if isinstance(v, str) and v.lower() in ("left", "center", "right")
-            }
         if isinstance(self._header_alignment, dict):
             default_align = str(self._header_alignment.get("default", "left")).lower()
             res = {}
@@ -458,29 +430,21 @@ class CTkTable(ctk.CTkFrame):
         return {}
 
     def _get_normalized_column_text_colors(self) -> dict[int, Any]:
-        if isinstance(self._text_color, list):
-            return {i: v for i, v in enumerate(self._text_color)}
         if isinstance(self._text_color, dict):
             return {int(k): v for k, v in self._text_color.items() if str(k).lower() != "default"}
         return {}
 
     def _get_normalized_header_text_colors(self) -> dict[int, Any]:
-        if isinstance(self._header_text_color, list):
-            return {i: v for i, v in enumerate(self._header_text_color)}
         if isinstance(self._header_text_color, dict):
             return {int(k): v for k, v in self._header_text_color.items() if str(k).lower() != "default"}
         return {}
 
     def _get_normalized_column_fonts(self) -> dict[int, Any]:
-        if isinstance(self._font, list):
-            return {i: v for i, v in enumerate(self._font)}
         if isinstance(self._font, dict):
             return {int(k): v for k, v in self._font.items() if str(k).lower() != "default"}
         return {}
 
     def _get_normalized_header_fonts(self) -> dict[int, Any]:
-        if isinstance(self._header_font, list):
-            return {i: v for i, v in enumerate(self._header_font)}
         if isinstance(self._header_font, dict):
             return {int(k): v for k, v in self._header_font.items() if str(k).lower() != "default"}
         return {}

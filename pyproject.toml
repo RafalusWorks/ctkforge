@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ctkforge"
-version = "0.3.0"
+version = "0.3.1"
 description = "CustomTkinter extension widgets: data table, popups / messageboxes, and spinbox."
 readme = "README.md"
 license = { text = "MIT" }
