@@ -1,6 +1,6 @@
 # CTkForge
 
-Custom extension components and widgets for [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter).
+Custom extension widgets for [CustomTkinter](https://github.com/TomSchimansky/CustomTkinter): high-performance data table, popups / messageboxes, and spinbox.
 
 [![PyPI version](https://img.shields.io/pypi/v/ctkforge.svg)](https://pypi.org/project/ctkforge/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)

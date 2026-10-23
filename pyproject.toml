@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ctkforge"
-version = "0.2.0"
-description = "CustomTkinter extension components and widgets"
+version = "0.3.0"
+description = "CustomTkinter extension widgets: data table, popups / messageboxes, and spinbox."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
@@ -14,11 +14,15 @@ authors = [
 requires-python = ">=3.12"
 keywords = [
     "customtkinter",
+    "customtkinter-table",
+    "ctktable",
     "tkinter",
     "gui",
     "widgets",
     "table",
+    "data-table",
     "popup",
+    "messagebox",
     "dialog",
     "spinbox",
 ]

@@ -6,7 +6,11 @@ without rearranging or mutating the original data list.
 """
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
+
+SortKey = Literal["str", "int", "float", "date"] | Callable[[Any], Any]
+
+__all__ = ["SortKey", "TableDataModel"]
 
 
 class TableDataModel:
@@ -19,13 +23,13 @@ class TableDataModel:
     def __init__(
         self,
         values: list[list[Any]] | None = None,
-        column_types: list[str] | dict[int, str] | None = None,
-        column_sort_keys: dict[int, Callable[[Any], Any]] | None = None,
+        sort_key: SortKey | dict[int | str, SortKey] | None = None,
     ) -> None:
         self._values: list[list[Any]] = [list(row) for row in values] if values is not None else []
         self._row_indexes: list[int] = list(range(len(self._values)))
-        self._column_types: list[str] | dict[int, str] | None = column_types
-        self._column_sort_keys: dict[int, Callable[[Any], Any]] | None = column_sort_keys
+        self._sort_key_default: SortKey = "str"
+        self._sort_key_cols: dict[int, SortKey] = {}
+        self.set_sort_key_rules(sort_key)
 
         self._sort_col: int | None = None
         self._sort_ascending: bool = True
@@ -51,22 +55,45 @@ class TableDataModel:
         return self._sort_ascending
 
     @property
-    def column_types(self) -> list[str] | dict[int, str] | None:
-        """Return the column type definitions."""
-        return self._column_types
+    def sort_key(self) -> dict[str | int, SortKey]:
+        """Return the active sort key configuration."""
+        res: dict[str | int, SortKey] = {"default": self._sort_key_default}
+        res.update(self._sort_key_cols)
+        return res
 
-    @column_types.setter
-    def column_types(self, types: list[str] | dict[int, str] | None) -> None:
-        self._column_types = types
-
-    @property
-    def column_sort_keys(self) -> dict[int, Callable[[Any], Any]] | None:
-        """Return custom sort key functions."""
-        return self._column_sort_keys
-
-    @column_sort_keys.setter
-    def column_sort_keys(self, keys: dict[int, Callable[[Any], Any]] | None) -> None:
-        self._column_sort_keys = keys
+    def set_sort_key_rules(self, rules: SortKey | dict[int | str, SortKey] | None) -> None:
+        """Update column sorting rules while preserving the active baseline when 'default' is omitted."""
+        if rules is None:
+            return
+        valid_keys = {"str", "int", "float", "date"}
+        if callable(rules):
+            self._sort_key_default = rules
+            self._sort_key_cols.clear()
+            return
+        if isinstance(rules, str):
+            key = rules.lower()
+            if key in valid_keys:
+                self._sort_key_default = key  # type: ignore[assignment]
+                self._sort_key_cols.clear()
+            return
+        if isinstance(rules, dict):
+            if "default" in rules:
+                val = rules["default"]
+                if callable(val):
+                    self._sort_key_default = val
+                elif isinstance(val, str) and val.lower() in valid_keys:
+                    self._sort_key_default = val.lower()  # type: ignore[assignment]
+            for col_idx, key_val in rules.items():
+                if str(col_idx).lower() == "default":
+                    continue
+                try:
+                    c = int(col_idx)
+                    if callable(key_val):
+                        self._sort_key_cols[c] = key_val
+                    elif isinstance(key_val, str) and key_val.lower() in valid_keys:
+                        self._sort_key_cols[c] = key_val.lower()  # type: ignore[assignment]
+                except (ValueError, TypeError):
+                    continue
 
     def reset_values(self, new_values: list[list[Any]] | None) -> None:
         """Replace the dataset and reset virtual sorting state."""
@@ -219,20 +246,15 @@ class TableDataModel:
 
     def extract_sort_value(self, raw_val: Any, col: int) -> Any:
         """Convert a cell value into a normalized, comparable sort key without crashing."""
-        if self._column_sort_keys and col in self._column_sort_keys:
+        key = self._sort_key_cols.get(col, self._sort_key_default)
+
+        if callable(key):
             try:
-                return self._column_sort_keys[col](raw_val)
-            except (ValueError, TypeError, KeyError, AttributeError):
+                return key(raw_val)
+            except Exception:
                 return str(raw_val).lower()
 
-        col_type = None
-        if (
-            (isinstance(self._column_types, list) and col < len(self._column_types))
-            or (isinstance(self._column_types, dict) and col in self._column_types)
-        ):
-            col_type = self._column_types[col]
-
-        if col_type == "int":
+        if key == "int":
             try:
                 return int(raw_val)
             except (ValueError, TypeError):
@@ -242,7 +264,7 @@ class TableDataModel:
                 except ValueError:
                     return 0
 
-        if col_type == "float":
+        if key == "float":
             try:
                 return float(raw_val)
             except (ValueError, TypeError):
@@ -252,7 +274,7 @@ class TableDataModel:
                 except ValueError:
                     return 0.0
 
-        if col_type == "date":
+        if key == "date":
             return str(raw_val)
 
         return str(raw_val).lower()

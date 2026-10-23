@@ -8,7 +8,7 @@ cleanly destroys the input box when editing finishes.
 import tkinter as tk
 from collections.abc import Callable
 from contextlib import suppress
-from typing import Any
+from typing import Any, Literal
 
 import customtkinter as ctk
 
@@ -53,6 +53,7 @@ class CellEditor:
         height: int,
         font: tuple[str, int] | ctk.CTkFont,
         border_color: str,
+        justify: Literal["left", "center", "right"] = "left",
     ) -> None:
         """Spawn a floating CTkEntry precisely positioned over the target cell."""
         if self._entry is not None:
@@ -60,11 +61,13 @@ class CellEditor:
 
         self._editing_cell = (display_row, col_index)
 
+        # Match text alignment to the target column setting
         self._entry = ctk.CTkEntry(
             self._canvas,
             width=width,
             height=height,
             font=font,
+            justify=justify,
             corner_radius=0,
             border_width=EDITOR_BORDER_WIDTH,
             border_color=border_color,

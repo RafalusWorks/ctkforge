@@ -21,8 +21,7 @@ table = CTkTable(
         [2, "Alan Turing", "Cryptanalyst", "£135,000"],
         [3, "Grace Hopper", "Computer Scientist", "£130,000"],
     ],
-    editable=True,
-    editable_columns_exclude=[0],
+    editable={"default": True, 0: False},
 )
 table.pack(fill="both", expand=True, padx=20, pady=20)
 

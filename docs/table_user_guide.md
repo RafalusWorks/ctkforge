@@ -123,59 +123,65 @@ Click any column header to cycle through three states:
 2. **2nd Click**: Sorts **Descending** (indicated by `▼`).
 3. **3rd Click**: **Clears Sort** (instantly restores original database order).
 
-### Enabling & Restricting Header Sorting (`header_sortable` & `header_sortable_exclude`)
+### Enabling & Restricting Header Sorting (`header_sortable`)
 
-By default, users can click any column header to sort. You can toggle interactive sorting globally and declare specific columns as exceptions using `header_sortable` and `header_sortable_exclude`:
+By default, users can click any column header to sort (`header_sortable=True`). You can control interactive sorting globally or per-column using a single argument:
+
+* **`header_sortable=True`**: All column headers are sortable (default).
+* **`header_sortable={0: False}`**: All columns sortable, **except** column 0.
+* **`header_sortable={"default": False, 2: True}`**: All columns locked, **except** column 2 (only it can be sorted).
 
 ```python
 table = CTkTable(
     ...,
-    header_sortable=True,  # Base rule: True (all on) or False (all off)
-    header_sortable_exclude=[3, 4],  # Column numbers inverted from the base rule
+    header_sortable={0: False},  # Sort all columns except ID
 )
 ```
 
-#### How It Works
-
-| `header_sortable` | `header_sortable_exclude` | What Happens on Header Click |
-| :--- | :--- | :--- |
-| **`True`** (default) | `None` (default) | **All columns sortable.** Clicking any column header cycles its sort. |
-| **`True`** | `[3, 4]` | **All columns sortable except [3, 4].** Clicking column 3 or 4 is ignored; all other columns sort normally. |
-| **`False`** | `None` | **Total lock.** Clicking any column header is ignored. |
-| **`False`** | `[3, 4]` | **All columns locked except [3, 4].** Only columns 3 and 4 can be sorted by clicking. |
-
+> **Baseline Preservation:** When reconfiguring with a dictionary (e.g. `table.configure(header_sortable={3: False})`), omitting `"default"` preserves whatever baseline was already active.
+>
 > **Programmatic Sorting Always Allowed:** Disabling header clicks only blocks interactive mouse clicks. You can still sort any column programmatically from Python code via `table.sort_by(...)` at any time.
 
-### Explicit Column Types (`column_types`)
-Rather than relying on fragile automatic guessing, you can declare column types explicitly:
+### Column Sort Keys (`sort_key`)
+Header clicks cycle through 3 states: **Ascending (▲)** → **Descending (▼)** → **Clear Sort** (restores insertion order).
+
+Rather than relying on fragile automatic guessing, you can declare column sorting types explicitly:
 
 ```python
 table = CTkTable(
     ...,
-    column_types={
+    sort_key={
+        "default": "str",  # Standard alphabetical comparison
         0: "int",  # Column 0: Numeric comparison (1, 2, 10 instead of 1, 10, 2)
         1: "date",  # Column 1: Date comparison
-        2: "str",  # Column 2: Standard alphabetical comparison
+        3: "float",  # Column 3: Numeric float comparison
     },
 )
 ```
-Supported types: `"int"`, `"float"`, `"str"`, and `"date"`.
+Supported types: `"str"`, `"int"`, `"float"`, `"date"`, or any custom function `Callable[[Any], Any]` (e.g. `sort_key={1: my_custom_key}`).
 
-### Custom Sort Keys (`column_sort_keys`)
-When a column contains special formatting (like currencies or file sizes), pass a custom extractor:
+| Key | Sorting Behavior | Example Transformation | Fallback on Invalid/Empty |
+| :--- | :--- | :--- | :--- |
+| `"str"` *(default)* | Case-insensitive alphabetical order. | `"Alice"`, `"bob"` → `"alice"`, `"bob"` | `""` |
+| `"int"` | Strips non-digit formatting and compares as whole numbers. | `"$1,420"`, `"-50kg"` → `1420`, `-50` (10 sorts after 2) | `0` |
+| `"float"` | Strips currency and formatting symbols, compares as decimals. | `"£1,420.50"`, `"99.9%"` → `1420.50`, `99.9` | `0.0` |
+| `"date"` | Chronological order for standard date strings (ISO format `YYYY-MM-DD`). | `"2026-03-15"` < `"2026-10-23"` | `""` |
 
+#### Custom Sort Key Example
 ```python
-def parse_currency(val):
-    # Extracts numeric float from "$1,420.50" -> 1420.50
-    cleaned = "".join(ch for ch in str(val) if ch.isdigit() or ch in ".-")
-    return float(cleaned) if cleaned else 0.0
+# Sort priority status logically ("Critical" > "High" > "Medium" > "Low") instead of alphabetically:
+PRIORITY = {"Critical": 3, "High": 2, "Medium": 1, "Low": 0}
+
+
+def my_custom_key(val: str) -> int:
+    return PRIORITY.get(val, -1)
 
 
 table = CTkTable(
-    ...,
-    column_sort_keys={
-        3: parse_currency,  # Column 3: Custom currency sorting
-    },
+    app,
+    headers=["Task", "Priority"],
+    values=tasks,
+    sort_key={1: my_custom_key},
 )
 ```
 
@@ -219,27 +225,28 @@ If you want `F2` to trigger in-place editing on the active cell, simply hook it 
 table.bind("<F2>", lambda _event: table.edit_focused_cell())
 ```
 
-### Enabling & Restricting Editable Columns (`editable` & `editable_columns_exclude`)
-By default, table cells are read-only (`editable=False`). This follows the exact same base-rule and exception logic as [Header Column Sorting](#enabling--restricting-header-sorting-header_sortable--header_sortable_exclude):
-* **`editable=False, editable_columns_exclude=[1, 2]`**: Entire table is locked, **except** columns 1 and 2 (only they are editable).
-* **`editable=True, editable_columns_exclude=[0]`**: Entire table is editable, **except** column 0 (locked primary key).
+### Enabling & Restricting Editable Columns (`editable`)
+By default, table cells are read-only (`editable=False`). You can enable editing globally or configure per-column rules using a single argument:
+
+* **`editable=True`**: Entire table is editable.
+* **`editable={"default": True, 0: False}`**: Entire table is editable, **except** column 0 (locked primary key).
+* **`editable={1: True, 2: True}`**: Entire table is locked, **except** columns 1 and 2 (only they are editable).
 
 ```python
 table = CTkTable(
     ...,
-    editable=False,  # Base rule: False (all locked) or True (all editable)
-    editable_columns_exclude=[1, 2],  # Column numbers inverted from the base rule
+    editable={"default": True, 0: False},  # Edit all columns except ID
 )
 ```
+
+> **Baseline Preservation:** When reconfiguring with a dictionary (e.g. `table.configure(editable={3: False})`), omitting `"default"` preserves whatever baseline was already active.
 
 ### Listening for Edits (`on_cell_edit`)
 Connect a callback to run code whenever a user modifies a cell:
 
 ```python
 def handle_cell_edit(row_index, col_index, old_value, new_value):
-    print(
-        f"Row {row_index}, Col {col_index} changed from '{old_value}' to '{new_value}'"
-    )
+    print(f"Row {row_index}, Col {col_index} changed from '{old_value}' to '{new_value}'")
     # You can trigger an auto-save or database update here
 
 
@@ -374,7 +381,88 @@ table = CTkTable(
 )
 ```
 
-## 11. Keyboard & Mouse Shortcuts Reference
+---
+
+## 11. Column & Header Styling (Single Polymorphic Arguments)
+
+You can style text alignment, colors, and fonts across columns and headers using single arguments (`justify`, `text_color`, `font`, `header_alignment`, `header_text_color`, `header_font`).
+
+Every styling argument accepts:
+1. **A single value** (applies across all columns/headers).
+2. **A dictionary with column index overrides and an optional `"default"` baseline**.
+
+> **Automatic Fallback:** Whenever `"default"` is omitted from the dictionary, unlisted columns automatically use their normal theme defaults (e.g. standard theme font, theme label text color, `"left"` alignment).
+
+### Text Alignment
+```python
+table = CTkTable(
+    app,
+    headers=["ID", "Name", "Department", "Salary", "Status"],
+    values=data,
+    # Body cell alignment (center ID and Status, right-align Salary, others default to left):
+    justify={
+        "default": "left",
+        0: "center",
+        3: "right",
+        4: "center",
+    },
+    # Center all column header titles:
+    header_alignment="center",
+)
+```
+
+### Column & Header Text Colors
+Pass hex strings or `(light_mode, dark_mode)` tuples:
+```python
+table = CTkTable(
+    app,
+    headers=headers,
+    values=data,
+    # Style specific body columns by index; unlisted columns use theme text color:
+    text_color={
+        3: ("#1b7a37", "#2ecc71"),  # Green: (light mode, dark mode) for column index 3
+        4: ("#8a6d00", "#f1c40f"),  # Amber: (light mode, dark mode) for column index 4
+    },
+    # Set header baseline color and override column index 3:
+    header_text_color={
+        "default": "#3B8ED0",  # Baseline for all headers
+        3: "#E06C75",  # Header column index 3 override
+    },
+)
+```
+
+### Fonts & Typography Shortcuts
+Pass font tuples `("Family", size, "weight")`, `ctk.CTkFont` objects, or plain string shortcuts (`"bold"`, `"italic"`, `"bold italic"`):
+```python
+table = CTkTable(
+    app,
+    headers=headers,
+    values=data,
+    # Make column index 3 bold using a shortcut string:
+    font={
+        3: "bold",
+    },
+    # Custom font on header column index 3:
+    header_font={
+        3: ("Segoe UI", 13, "bold"),
+    },
+)
+```
+
+### Header Hover Tint
+Highlight sortable column headers when hovered with `header_hover_color`:
+```python
+table = CTkTable(
+    app,
+    headers=headers,
+    values=data,
+    header_hover_color=("#3a7ebf", "#1f538d"),
+)
+```
+
+---
+
+## 12. Keyboard & Mouse Shortcuts Reference
 
 | Action / Shortcut | Event | Description |
 | :--- | :--- | :--- |
@@ -395,7 +483,7 @@ table = CTkTable(
 
 ---
 
-## 12. Complete Copy-Paste Example
+## 13. Complete Copy-Paste Example
 
 ```python
 import customtkinter as ctk
@@ -413,11 +501,6 @@ data = [
 ]
 
 
-def parse_price(val):
-    cleaned = "".join(ch for ch in str(val) if ch.isdigit() or ch in ".-")
-    return float(cleaned) if cleaned else 0.0
-
-
 def on_edit(row, col, old_val, new_val):
     print(f"Record #{row + 1} Col {col} edited: '{old_val}' -> '{new_val}'")
 
@@ -427,10 +510,14 @@ table = CTkTable(
     headers=headers,
     values=data,
     column_widths=[90, 200, 100, 120, 130],
-    column_types={0: "int", 2: "int"},  # Numeric sorting on ID and Qty
-    column_sort_keys={3: parse_price},  # Custom currency sorting on Price
-    editable=False,
-    editable_columns_exclude=[1, 2, 3],  # Only allow editing Name, Qty, Price
+    sort_key={"default": "str", 0: "int", 2: "int", 3: "float"},  # Numeric sorting on ID, Qty, and Price
+    # Unified column alignment and styling:
+    justify={"default": "left", 0: "center", 2: "center", 3: "right", 4: "center"},
+    font={3: "bold"},
+    text_color={3: ("#1b7a37", "#2ecc71")},  # Emerald highlight on Price
+    header_alignment="center",
+    header_hover_color=("#3a7ebf", "#1f538d"),
+    editable={1: True, 2: True, 3: True},  # Only allow editing Name, Qty, Price
     on_cell_edit=on_edit,
     selection_target="row",
     selection_mode="extended",

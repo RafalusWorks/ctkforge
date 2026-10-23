@@ -1,8 +1,7 @@
-"""Comprehensive test and demonstration script for CTkPopup."""
+"""Comprehensive automated test suite for CTkPopup."""
 
 from __future__ import annotations
 
-import time
 from typing import Any
 
 import customtkinter as ctk
@@ -10,13 +9,11 @@ import customtkinter as ctk
 from ctkforge import CTkPopup
 
 
-def run_popup_test_suite(root: ctk.CTk, visual: bool = False) -> None:
+def run_popup_test_suite(root: ctk.CTk) -> None:
     """Execute automated tests verifying CTkPopup CustomTkinter convention compliance."""
 
-    def step(delay: float = 0.2) -> None:
-        if visual:
-            root.update()
-            time.sleep(delay)
+    def step() -> None:
+        root.update()
 
     # 1. Verification of CTk Naming Convention: 'text' parameter and .cget()
     step()
@@ -68,7 +65,9 @@ def run_popup_test_suite(root: ctk.CTk, visual: bool = False) -> None:
 
     # 6. Automatic upgrade from CTkLabel to CTkTextbox on long text
     step()
-    long_traceback = "Traceback (most recent call last):\n" + "\n".join([f"  File 'module_{i}.py', line {i*10}, in func_{i}" for i in range(25)])
+    long_traceback = "Traceback (most recent call last):\n" + "\n".join(
+        [f"  File 'module_{i}.py', line {i * 10}, in func_{i}" for i in range(25)]
+    )
     popup.configure(text=long_traceback)
     root.update()
     assert popup._message_textbox is not None, "[6/10 Failed] Expected switch to CTkTextbox for long text"
@@ -85,7 +84,12 @@ def run_popup_test_suite(root: ctk.CTk, visual: bool = False) -> None:
 
     # 8. Dynamic reconfiguration of action buttons
     step()
-    popup.configure(buttons=[{"text": "Confirm", "value": "confirmed", "role": "primary"}, {"text": "Abort", "value": "aborted", "role": "cancel"}])
+    popup.configure(
+        buttons=[
+            {"text": "Confirm", "value": "confirmed", "role": "primary"},
+            {"text": "Abort", "value": "aborted", "role": "cancel"},
+        ]
+    )
     root.update()
     assert len(popup._action_buttons) == 2, f"[8/10 Failed] Expected 2 action buttons, got {len(popup._action_buttons)}"
     print("[8/10] Dynamic button reconfiguration via .configure(buttons=...): PASSED")
@@ -154,11 +158,15 @@ def run_headless_tests() -> None:
     root.update()
 
     print("Running automated sanity tests for CTkPopup (headless)...")
-    run_popup_test_suite(root, visual=False)
+    run_popup_test_suite(root)
     root.destroy()
     print("All automated checks (11/11) passed successfully!")
 
 
-if __name__ == "__main__":
+def test_ctkpopup() -> None:
+    """Entry point for automated pytest test runner discovery."""
     run_headless_tests()
 
+
+if __name__ == "__main__":
+    run_headless_tests()

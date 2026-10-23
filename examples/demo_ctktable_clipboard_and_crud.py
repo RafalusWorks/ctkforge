@@ -22,9 +22,7 @@ from ctkforge import CTkTable
 APPLICATION_NAME: Final[str] = "CTkTable"
 APPLICATION_VERSION: Final[str] = "0.5.0"
 APPLICATION_TAGLINE: Final[str] = "Clipboard, Selection & CRUD (Phase 5)"
-APPLICATION_WINDOW_TITLE: Final[str] = (
-    f"{APPLICATION_NAME} v{APPLICATION_VERSION} - {APPLICATION_TAGLINE}"
-)
+APPLICATION_WINDOW_TITLE: Final[str] = f"{APPLICATION_NAME} v{APPLICATION_VERSION} - {APPLICATION_TAGLINE}"
 
 BASE_WINDOW_WIDTH: Final[int] = 1100
 BASE_WINDOW_HEIGHT: Final[int] = 720
@@ -57,15 +55,12 @@ COLUMN_WIDTHS: Final[list[int]] = [
     110,  # Status
 ]
 
-COLUMN_TYPES: Final[dict[int, str]] = {
-    0: "str",
+TABLE_SORT_KEY: Final[dict[int | str, str]] = {
+    "default": "str",
     1: "date",
-    2: "str",
-    3: "str",
-    4: "str",
-    5: "str",
     6: "int",
-    9: "str",
+    7: "float",
+    8: "float",
 }
 
 
@@ -78,12 +73,6 @@ def parse_currency(val: Any) -> float:
         return float(cleaned)
     except ValueError:
         return 0.0
-
-
-COLUMN_SORT_KEYS: Final[dict[int, Any]] = {
-    7: parse_currency,  # Unit Price
-    8: parse_currency,  # Total Amount
-}
 
 
 def generate_mock_data(row_count: int) -> list[list[Any]]:
@@ -204,9 +193,7 @@ class TableDemoApp(ctk.CTk):
         toolbar.grid(row=1, column=0, sticky="ew", padx=20, pady=(5, 10))
 
         # Target selection (Row vs Cell)
-        target_label = ctk.CTkLabel(
-            toolbar, text="Select Target:", font=ctk.CTkFont(size=12, weight="bold")
-        )
+        target_label = ctk.CTkLabel(toolbar, text="Select Target:", font=ctk.CTkFont(size=12, weight="bold"))
         target_label.pack(side="left", padx=(0, 5))
 
         self._target_seg = ctk.CTkSegmentedButton(
@@ -260,17 +247,15 @@ class TableDemoApp(ctk.CTk):
         initial_data = generate_mock_data(50_000)
 
         # Allow editing on Customer, Email, Category, SKU, Quantity, Unit Price
-        editable_cols = [2, 3, 4, 5, 6, 7]
+        editable_cols = {c: True for c in [2, 3, 4, 5, 6, 7]}
 
         self._table = CTkTable(
             self,
             values=initial_data,
             headers=TABLE_HEADERS,
             column_widths=COLUMN_WIDTHS,
-            column_types=COLUMN_TYPES,
-            column_sort_keys=COLUMN_SORT_KEYS,
-            editable=False,
-            editable_columns_exclude=editable_cols,
+            sort_key=TABLE_SORT_KEY,
+            editable=editable_cols,
             on_cell_edit=self._on_cell_edited,
             row_height=28,
             header_height=32,
@@ -280,8 +265,7 @@ class TableDemoApp(ctk.CTk):
             alternate_row_color=("gray92", "gray14"),
             corner_radius=5,
             border_width=1,
-            header_sortable=True,
-            header_sortable_exclude=[0, 1],
+            header_sortable={0: False, 1: False},
             command=self._on_table_selection,
         )
         self._table.grid(row=2, column=0, sticky="nsew", padx=20, pady=(0, 8))
@@ -296,16 +280,10 @@ class TableDemoApp(ctk.CTk):
 
         # Right-click context menu:
         self._context_menu = tk.Menu(self, tearoff=0)
-        self._context_menu.add_command(
-            label="Copy TSV (Ctrl+C)", command=self._trigger_copy
-        )
+        self._context_menu.add_command(label="Copy TSV (Ctrl+C)", command=self._trigger_copy)
         self._context_menu.add_separator()
-        self._context_menu.add_command(
-            label="Insert Row", command=self._insert_sample_row
-        )
-        self._context_menu.add_command(
-            label="Delete Row(s)", command=self._delete_selected_rows
-        )
+        self._context_menu.add_command(label="Insert Row", command=self._insert_sample_row)
+        self._context_menu.add_command(label="Delete Row(s)", command=self._delete_selected_rows)
         self._table.bind("<Button-3>", self._show_context_menu)
 
     def _build_clipboard_preview_bar(self) -> None:
@@ -328,9 +306,7 @@ class TableDemoApp(ctk.CTk):
             text_color="gray75",
             anchor="w",
         )
-        self._clip_preview_label.pack(
-            side="left", fill="x", expand=True, padx=(0, 10), pady=4
-        )
+        self._clip_preview_label.pack(side="left", fill="x", expand=True, padx=(0, 10), pady=4)
 
     def _build_status_bar(self) -> None:
         """Create telemetry status bar displaying record counts, selection, and help."""
@@ -345,9 +321,7 @@ class TableDemoApp(ctk.CTk):
         )
         self._status_label.pack(side="left")
 
-        scaling_val = (
-            self._get_window_scaling() if hasattr(self, "_get_window_scaling") else 1.0
-        )
+        scaling_val = self._get_window_scaling() if hasattr(self, "_get_window_scaling") else 1.0
         self._telemetry_label = ctk.CTkLabel(
             status_frame,
             text=f"{len(self._table.get()):,} Records | DPI: {scaling_val * 100:.0f}%",
@@ -358,12 +332,8 @@ class TableDemoApp(ctk.CTk):
 
     def _update_record_count(self) -> None:
         """Update record count in the status telemetry."""
-        scaling_val = (
-            self._get_window_scaling() if hasattr(self, "_get_window_scaling") else 1.0
-        )
-        self._telemetry_label.configure(
-            text=f"{len(self._table.get()):,} Records | DPI: {scaling_val * 100:.0f}%"
-        )
+        scaling_val = self._get_window_scaling() if hasattr(self, "_get_window_scaling") else 1.0
+        self._telemetry_label.configure(text=f"{len(self._table.get()):,} Records | DPI: {scaling_val * 100:.0f}%")
 
     def _show_context_menu(self, event: Any) -> None:
         """Display context menu at mouse cursor with right-click selection."""
@@ -395,17 +365,13 @@ class TableDemoApp(ctk.CTk):
 
     def _on_table_selection(self, selected_items: list[Any]) -> None:
         """Handle selection events from CTkTable."""
-        target_name = (
-            "rows" if self._table.cget("selection_target") == "row" else "cells"
-        )
+        target_name = "rows" if self._table.cget("selection_target") == "row" else "cells"
         self._status_label.configure(
             text=f"Selected: {len(selected_items):,} {target_name} | Del to delete | Ctrl+C to copy",
             text_color="gray65",
         )
 
-    def _on_cell_edited(
-        self, actual_row: int, col: int, old_val: Any, new_val: Any
-    ) -> None:
+    def _on_cell_edited(self, actual_row: int, col: int, old_val: Any, new_val: Any) -> None:
         """Display real-time telemetry when a cell is edited."""
         col_name = TABLE_HEADERS[col] if col < len(TABLE_HEADERS) else f"Col {col}"
         self._status_label.configure(
@@ -490,9 +456,7 @@ class TableDemoApp(ctk.CTk):
         if tsv:
             first_line = tsv.splitlines()[0]
             line_count = len(tsv.splitlines())
-            display_snippet = (
-                first_line if len(first_line) < 70 else f"{first_line[:70]}..."
-            )
+            display_snippet = first_line if len(first_line) < 70 else f"{first_line[:70]}..."
             suffix = f" (+{line_count - 1} more lines)" if line_count > 1 else ""
             self._clip_preview_label.configure(
                 text=f'Copied {line_count:,} line(s) to Clipboard: "{display_snippet}"{suffix}',

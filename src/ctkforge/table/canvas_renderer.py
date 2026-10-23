@@ -71,6 +71,12 @@ class TableRenderer:
         sort_col: int | None,
         sort_ascending: bool,
         scaled_padding: int,
+        header_alignments: dict[int, str] | None = None,
+        header_text_colors: dict[int, str] | None = None,
+        header_fonts: dict[int, Any] | None = None,
+        header_font_objs: dict[int, tkfont.Font] | None = None,
+        hovered_col: int | None = None,
+        header_hover_color_hex: str | None = None,
     ) -> None:
         """Render the pinned table header bar with column dividers and sort glyphs."""
         canvas.delete("all")
@@ -83,17 +89,69 @@ class TableRenderer:
 
         if radius > 0 and header_w > 2 * radius:
             canvas.create_arc(
-                0, 0, 2 * radius, 2 * radius,
-                start=HEADER_ARC_START_LEFT, extent=HEADER_ARC_EXTENT, fill=bg_hex, outline="",
+                0,
+                0,
+                2 * radius,
+                2 * radius,
+                start=HEADER_ARC_START_LEFT,
+                extent=HEADER_ARC_EXTENT,
+                fill=bg_hex,
+                outline="",
             )
             canvas.create_arc(
-                header_w - 2 * radius, 0, header_w, 2 * radius,
-                start=HEADER_ARC_START_RIGHT, extent=HEADER_ARC_EXTENT, fill=bg_hex, outline="",
+                header_w - 2 * radius,
+                0,
+                header_w,
+                2 * radius,
+                start=HEADER_ARC_START_RIGHT,
+                extent=HEADER_ARC_EXTENT,
+                fill=bg_hex,
+                outline="",
             )
             canvas.create_rectangle(radius, 0, header_w - radius, header_height, fill=bg_hex, outline="")
             canvas.create_rectangle(0, radius, header_w, header_height, fill=bg_hex, outline="")
         else:
             canvas.create_rectangle(0, 0, header_w, header_height, fill=bg_hex, outline="")
+
+        # Draw hover background behind the active column if hovered
+        total_cols = len(col_widths)
+        if hovered_col is not None and header_hover_color_hex and 0 <= hovered_col < total_cols:
+            h_left = col_offsets[hovered_col] - scroll_x
+            h_right = col_offsets[hovered_col + 1] - scroll_x
+            if radius > 0 and hovered_col == 0 and h_left >= 0:
+                # Rounded top-left corner slice
+                canvas.create_arc(
+                    h_left,
+                    0,
+                    h_left + 2 * radius,
+                    2 * radius,
+                    start=HEADER_ARC_START_LEFT,
+                    extent=HEADER_ARC_EXTENT,
+                    fill=header_hover_color_hex,
+                    outline="",
+                )
+                canvas.create_rectangle(
+                    h_left + radius, 0, h_right, header_height, fill=header_hover_color_hex, outline=""
+                )
+                canvas.create_rectangle(h_left, radius, h_right, header_height, fill=header_hover_color_hex, outline="")
+            elif radius > 0 and hovered_col == total_cols - 1 and h_right <= header_w:
+                # Rounded top-right corner slice
+                canvas.create_arc(
+                    h_right - 2 * radius,
+                    0,
+                    h_right,
+                    2 * radius,
+                    start=HEADER_ARC_START_RIGHT,
+                    extent=HEADER_ARC_EXTENT,
+                    fill=header_hover_color_hex,
+                    outline="",
+                )
+                canvas.create_rectangle(
+                    h_left, 0, h_right - radius, header_height, fill=header_hover_color_hex, outline=""
+                )
+                canvas.create_rectangle(h_left, radius, h_right, header_height, fill=header_hover_color_hex, outline="")
+            else:
+                canvas.create_rectangle(h_left, 0, h_right, header_height, fill=header_hover_color_hex, outline="")
 
         # Bottom border line
         canvas.create_line(0, header_height - 1, header_w, header_height - 1, fill=divider_color_hex)
@@ -101,11 +159,17 @@ class TableRenderer:
         # Columns
         for c in range(start_col, end_col):
             x_left = col_offsets[c] - scroll_x
+            x_right = col_offsets[c + 1] - scroll_x
             col_w = col_widths[c]
             max_w = col_w - (scaled_padding * 2)
 
             if c > 0:
                 canvas.create_line(x_left, 0, x_left, header_height, fill=divider_color_hex)
+
+            # Determine column-specific header font and color
+            col_h_font = header_fonts[c] if (header_fonts and c in header_fonts) else header_font
+            col_h_font_obj = header_font_objs[c] if (header_font_objs and c in header_font_objs) else header_font_obj
+            col_h_color = header_text_colors[c] if (header_text_colors and c in header_text_colors) else text_color_hex
 
             base_title = headers[c] if c < len(headers) else f"Col {c + 1}"
             if sort_col == c:
@@ -114,14 +178,27 @@ class TableRenderer:
             else:
                 header_title = base_title
 
-            disp_title = self.truncate_text(header_title, max_w, header_font_obj)
+            disp_title = self.truncate_text(header_title, max_w, col_h_font_obj)
+
+            # Determine text placement and anchor based on header alignment
+            h_align = header_alignments.get(c, "left") if header_alignments else "left"
+            if h_align == "center":
+                anchor = "center"
+                x_pos = (x_left + x_right) / 2
+            elif h_align == "right":
+                anchor = "e"
+                x_pos = x_right - scaled_padding
+            else:
+                anchor = "w"
+                x_pos = x_left + scaled_padding
+
             canvas.create_text(
-                x_left + scaled_padding,
+                x_pos,
                 header_height // 2,
                 text=disp_title,
-                anchor="w",
-                fill=text_color_hex,
-                font=header_font,
+                anchor=anchor,
+                fill=col_h_color,
+                font=col_h_font,
             )
 
     def render_body(
@@ -147,6 +224,10 @@ class TableRenderer:
         divider_color_hex: str,
         body_font: Any,
         scaled_padding: int,
+        column_alignments: dict[int, str] | None = None,
+        col_text_colors: dict[int, str] | None = None,
+        col_fonts: dict[int, Any] | None = None,
+        col_font_objs: dict[int, tkfont.Font] | None = None,
     ) -> None:
         """Render rows and cells within the visible viewport."""
         canvas.delete("all")
@@ -186,23 +267,50 @@ class TableRenderer:
                 if c > 0:
                     canvas.create_line(x_left, y_top, x_left, y_bottom, fill=divider_color_hex)
 
-                current_text_color = selected_text_hex if (is_row_selected or is_cell_selected) else text_color_hex
-                display_val = self.truncate_text(str(row_data[c]), max_text_w, body_font_obj)
+                # Prioritize selection color over custom column text color
+                if is_row_selected or is_cell_selected:
+                    current_text_color = selected_text_hex
+                elif col_text_colors and c in col_text_colors:
+                    current_text_color = col_text_colors[c]
+                else:
+                    current_text_color = text_color_hex
+
+                # Resolve column font and font measurement object
+                cell_font = col_fonts[c] if (col_fonts and c in col_fonts) else body_font
+                cell_font_obj = col_font_objs[c] if (col_font_objs and c in col_font_objs) else body_font_obj
+
+                display_val = self.truncate_text(str(row_data[c]), max_text_w, cell_font_obj)
+
+                # Position text according to column alignment
+                align = column_alignments.get(c, "left") if column_alignments else "left"
+                if align == "center":
+                    anchor = "center"
+                    x_pos = (x_left + x_right) / 2
+                elif align == "right":
+                    anchor = "e"
+                    x_pos = x_right - scaled_padding
+                else:
+                    anchor = "w"
+                    x_pos = x_left + scaled_padding
 
                 canvas.create_text(
-                    x_left + scaled_padding,
+                    x_pos,
                     y_top + (scaled_row_height // 2),
                     text=display_val,
-                    anchor="w",
+                    anchor=anchor,
                     fill=current_text_color,
-                    font=body_font,
+                    font=cell_font,
                 )
 
             # Focus indicator ring
             if is_row_target and selection_manager.focused_row == r:
                 canvas.create_rectangle(
-                    1, y_top + 1, canvas_width - 2, y_bottom - 1,
-                    outline=divider_color_hex, dash=FOCUS_RING_DASH,
+                    1,
+                    y_top + 1,
+                    canvas_width - 2,
+                    y_bottom - 1,
+                    outline=divider_color_hex,
+                    dash=FOCUS_RING_DASH,
                 )
 
     @staticmethod
