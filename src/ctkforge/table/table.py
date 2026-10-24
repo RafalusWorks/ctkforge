@@ -13,23 +13,18 @@ from typing import Any, Literal, overload, override
 
 import customtkinter as ctk
 
-from ctkforge.geometry import scale, unscale
+from ctkforge.geometry import scale
 from ctkforge.table.canvas_renderer import TableRenderer
 from ctkforge.table.cell_editor import CellEditor
-from ctkforge.table.column_resizer import ColumnResizer
+from ctkforge.table.column_layout import ColumnLayoutManager, TextMeasureLookup
 from ctkforge.table.constants import (
-    AUTOFIT_FALLBACK_WIDTH,
-    AUTOFIT_PADDING_PX,
-    AUTOFIT_SAMPLE_ROWS,
     CELL_HORIZONTAL_PADDING,
     DEFAULT_BORDER_SPACING,
     DEFAULT_HEADER_HEIGHT,
     DEFAULT_OVERSCAN_COLS,
     DEFAULT_OVERSCAN_ROWS,
     DEFAULT_ROW_HEIGHT,
-    DIVIDER_HOVER_TOLERANCE,
     HORIZONTAL_SCROLL_STEP_PX,
-    MIN_COLUMN_WIDTH,
     MIN_HEADER_HEIGHT,
     MIN_ROW_HEIGHT,
     MOUSEWHEEL_BASE_DELTA,
@@ -38,6 +33,8 @@ from ctkforge.table.constants import (
     TK_SHIFT_MASK,
 )
 from ctkforge.table.data_model import TableDataModel
+from ctkforge.table.header_controller import HeaderController
+from ctkforge.table.keyboard_router import KeyboardRouter
 from ctkforge.table.selection_manager import SelectionManager
 
 __all__ = ["CTkTable"]
@@ -133,20 +130,25 @@ class CTkTable(ctk.CTkFrame):
             sort_key=self._normalize_sort_key_for_model(sort_key),
         )
 
-        # Column visibility rules
-        self._show_columns_default: bool = True
-        self._show_columns_cols: dict[int, bool] = {}
-        self._raw_show_columns = show_columns
-        self._set_show_columns_rules(show_columns)
-
-        self._column_widths: Any = column_widths
+        # Column visibility, widths, geometry, and auto-fit
+        self._layout_mgr = ColumnLayoutManager(
+            self,
+            self._data_model,
+            show_columns=show_columns,
+            column_widths=column_widths,
+            get_total_cols=self._get_total_cols,
+            get_headers=lambda: self._headers,
+            get_canvas_width=lambda: self._table_canvas.winfo_width(),
+            normalize_scoped_dict=self._normalize_scoped_dict,
+            resolve_col_index=self._resolve_col_index,
+            create_text_measure_lookup=self._create_text_measure_lookup,
+            on_layout_changed=self._redraw,
+        )
 
         # Column body styling
         self._justify = justify
         self._header_alignment = header_alignment
         self._header_hover_color = header_hover_color
-        self._hovered_header_col: int | None = None
-        self._current_header_cursor: str = ""
 
         # Editing rules
         self._editable_default: bool = False
@@ -155,19 +157,10 @@ class CTkTable(ctk.CTkFrame):
         self._set_editable_rules(editable)
         self.on_cell_edit: Callable[[int, int, Any, Any], None] | None = on_cell_edit
 
-        # Header sorting rules
-        self._header_sortable_default: bool = True
-        self._header_sortable_cols: dict[int, bool] = {}
-        self._raw_header_sortable = header_sortable
-        self._set_header_sortable_rules(header_sortable)
-
         self._row_height: int = max(MIN_ROW_HEIGHT, row_height)
         self._header_height: int = max(MIN_HEADER_HEIGHT, header_height)
         self.command: Callable[[Any], None] | None = command
         self._copyable: bool = copyable
-
-        # Interactive column resize state
-        self._column_resizer = ColumnResizer()
 
         # Typography & Color tokens
         self._font: tuple[str, int] | ctk.CTkFont = ctk.CTkFont() if font is None else font
@@ -227,6 +220,42 @@ class CTkTable(ctk.CTkFrame):
             on_cancel=self._cancel_edit,
         )
 
+        # Keyboard navigation and shortcuts
+        self._keyboard_router = KeyboardRouter(
+            self._data_model,
+            self._selection_manager,
+            self._layout_mgr,
+            get_page_row_count=self._get_page_row_count,
+            is_editing=lambda: self._editor.is_editing,
+            is_copyable=lambda: self._copyable,
+            scroll_to=lambda row, col: self.scroll_to(row=row, col=col),
+            start_editing=self._start_editing,
+            cancel_edit=self._cancel_edit,
+            select_all=self.select_all,
+            clear_selection=self.clear_selection,
+            copy_selection=self.copy_selection,
+            notify_selection_changed=self._notify_command,
+            redraw=self._redraw,
+        )
+
+        # Header hover, click sorting, and divider dragging
+        self._header_controller = HeaderController(
+            self,
+            self._header_canvas,
+            self._data_model,
+            self._layout_mgr,
+            header_sortable=header_sortable,
+            normalize_scoped_dict=self._normalize_scoped_dict,
+            is_header_visible=lambda: self._show_headers,
+            has_hover_color=lambda: self._header_hover_color is not None,
+            get_canvas_width=lambda: self._table_canvas.winfo_width(),
+            get_scroll_x=lambda: self._scroll_x,
+            sort_by=lambda col, ascending: self.sort_by(col, ascending=ascending),
+            clear_sort=self.clear_sort,
+            redraw_header=self._redraw_header,
+            redraw=self._redraw,
+        )
+
         # Pre-resolved color and font caches for high performance
         self._cached_colors: dict[str, str] = {}
         self._cached_col_text_colors: dict[int, str] = {}
@@ -257,29 +286,9 @@ class CTkTable(ctk.CTkFrame):
         self._table_canvas.bind("<Button-1>", self._on_body_click)
         self._table_canvas.bind("<Double-Button-1>", self._on_body_double_click)
 
-        # Keyboard Navigation
-        self._table_canvas.bind("<Up>", lambda e: self._navigate_focus(-1, 0, e))
-        self._table_canvas.bind("<Down>", lambda e: self._navigate_focus(1, 0, e))
-        self._table_canvas.bind("<Left>", lambda e: self._navigate_focus(0, -1, e))
-        self._table_canvas.bind("<Right>", lambda e: self._navigate_focus(0, 1, e))
-        self._table_canvas.bind("<Return>", self._on_enter_key)
-        self._table_canvas.bind("<Prior>", self._on_page_up)
-        self._table_canvas.bind("<Next>", self._on_page_down)
-        self._table_canvas.bind("<Home>", self._on_home)
-        self._table_canvas.bind("<End>", self._on_end)
-        self._table_canvas.bind("<Control-a>", self._on_select_all)
-        self._table_canvas.bind("<Control-c>", self._on_copy_shortcut)
-        self._table_canvas.bind("<space>", self._on_space)
-        self._table_canvas.bind("<Escape>", self._on_escape_key)
+        self._keyboard_router.bind_to(self._table_canvas)
 
-        # Header Column Resizing and Sorting
-        self._header_canvas.bind("<Motion>", self._on_header_motion)
-        self._header_canvas.bind("<Button-1>", self._on_header_click)
-        self._header_canvas.bind("<B1-Motion>", self._on_header_drag)
-        self._header_canvas.bind("<ButtonRelease-1>", self._on_header_release)
-        self._header_canvas.bind("<Double-Button-1>", self._on_header_double_click)
-        self._header_canvas.bind("<Triple-Button-1>", self._on_header_double_click)
-        self._header_canvas.bind("<Leave>", self._on_header_leave)
+        self._header_controller.bind_events()
 
     # -------------------------------------------------------------------------
     # Color & Layout Configuration
@@ -514,33 +523,11 @@ class CTkTable(ctk.CTkFrame):
             return result
         return sort_key
 
-    def _set_show_columns_rules(self, show_columns: bool | dict[int | str, bool]) -> None:
-        """Update column visibility state, preserving baseline when 'default' is omitted."""
-        self._raw_show_columns = show_columns
-        if isinstance(show_columns, dict):
-            default_val, resolved = self._normalize_scoped_dict(show_columns)
-            if default_val is not None:
-                self._show_columns_default = bool(default_val)
-            for k, v in resolved.items():
-                self._show_columns_cols[k] = bool(v)
-        else:
-            self._show_columns_default = bool(show_columns)
-            self._show_columns_cols.clear()
-
-    def _is_column_shown(self, col: int) -> bool:
-        """Check whether a logical column is marked visible."""
-        return self._show_columns_cols.get(col, self._show_columns_default)
-
-    def _get_visible_columns(self) -> list[int]:
-        """Return sorted list of logical column indexes that are currently visible."""
-        total_cols = self._get_total_cols()
-        return [c for c in range(total_cols) if self._is_column_shown(c)]
-
     def _re_normalize_scoped_attributes(self) -> None:
         """Re-normalize active scoped attribute dictionaries whenever headers change."""
-        self._set_show_columns_rules(self._raw_show_columns)
+        self._layout_mgr.reapply_show_columns_rules()
         self._set_editable_rules(self._raw_editable)
-        self._set_header_sortable_rules(self._raw_header_sortable)
+        self._header_controller.reapply_sortable_rules()
         self._update_colors()
         self._update_fonts()
         self._data_model.set_sort_key_rules(self._normalize_sort_key_for_model(self._raw_sort_key))
@@ -628,6 +615,10 @@ class CTkTable(ctk.CTkFrame):
     def _get_scaled_header_height(self) -> int:
         return scale(self, self._header_height)
 
+    def _get_page_row_count(self) -> int:
+        """Return how many whole rows fit in the visible body area, never less than one."""
+        return max(1, self._table_canvas.winfo_height() // self._get_scaled_row_height())
+
     def _get_total_cols(self) -> int:
         if self._headers is not None:
             return len(self._headers)
@@ -635,74 +626,18 @@ class CTkTable(ctk.CTkFrame):
             return len(self._data_model.values[0])
         return 0
 
-    def _calculate_column_geometry(self, canvas_width: int) -> tuple[list[int], list[int]]:
-        """Compute pixel widths and cumulative prefix-sum offsets for all visible columns."""
-        visible_cols = self._get_visible_columns()
-        if not visible_cols:
-            return [], [0]
+    def _create_text_measure_lookup(self) -> TextMeasureLookup:
+        """Build a lookup that returns the header and body text measuring functions for any column."""
+        header_fallback = tkfont.Font(font=self._apply_font_scaling(self._get_base_header_font()))
+        body_fallback = tkfont.Font(font=self._apply_font_scaling(self._get_base_font()))
 
-        min_col_w = scale(self, MIN_COLUMN_WIDTH)
+        def lookup(col: int) -> tuple[Callable[[str], int], Callable[[str], int]]:
+            """Return (header_measure, body_measure) for a column, using its own fonts when it has them."""
+            header_font = self._cached_header_font_objs.get(col, header_fallback)
+            body_font = self._cached_col_font_objs.get(col, body_fallback)
+            return header_font.measure, body_font.measure
 
-        # 1. Resolve raw width target per visible column: either an int (unscaled px) or "auto"
-        col_targets: list[int | str] = []
-        if self._column_widths is None or (
-            isinstance(self._column_widths, str) and self._column_widths.lower() == "auto"
-        ):
-            col_targets = ["auto"] * len(visible_cols)
-        elif isinstance(self._column_widths, (int, float)):
-            col_targets = [max(MIN_COLUMN_WIDTH, int(self._column_widths))] * len(visible_cols)
-        elif isinstance(self._column_widths, dict):
-            default_val, resolved = self._normalize_scoped_dict(self._column_widths)
-            fallback = default_val if default_val is not None else "auto"
-            for c in visible_cols:
-                raw = resolved.get(c, fallback)
-                if isinstance(raw, str) and raw.lower() == "auto":
-                    col_targets.append("auto")
-                elif isinstance(raw, (int, float)):
-                    col_targets.append(max(MIN_COLUMN_WIDTH, int(raw)))
-                else:
-                    col_targets.append("auto")
-        else:
-            col_targets = ["auto"] * len(visible_cols)
-
-        # 2. Scale fixed columns and identify auto columns (indices within visible_cols)
-        fixed_widths: dict[int, int] = {}
-        auto_indices: list[int] = []
-        for v_idx, target in enumerate(col_targets):
-            if isinstance(target, int):
-                fixed_widths[v_idx] = max(min_col_w, scale(self, target))
-            else:
-                auto_indices.append(v_idx)
-
-        # 3. Calculate auto column widths by distributing available slack space
-        total_fixed_w = sum(fixed_widths.values())
-        slack = max(0, canvas_width - total_fixed_w)
-        num_auto = len(auto_indices)
-
-        auto_widths: dict[int, int] = {}
-        if num_auto > 0:
-            base_auto = max(min_col_w, slack // num_auto)
-            remainder = max(0, slack - (base_auto * num_auto))
-            for i, v_idx in enumerate(auto_indices):
-                extra = 1 if i < remainder and (slack >= min_col_w * num_auto) else 0
-                auto_widths[v_idx] = base_auto + extra
-
-        # 4. Assemble final column widths list in visible order
-        col_widths: list[int] = []
-        for v_idx in range(len(visible_cols)):
-            if v_idx in fixed_widths:
-                col_widths.append(fixed_widths[v_idx])
-            else:
-                col_widths.append(auto_widths.get(v_idx, min_col_w))
-
-        # 5. Compute prefix-sum offsets
-        col_offsets = [0]
-        cumulative = 0
-        for w in col_widths:
-            cumulative += w
-            col_offsets.append(cumulative)
-
-        return col_widths, col_offsets
+        return lookup
 
     # -------------------------------------------------------------------------
     # Scrolling & Viewport Positioning
@@ -730,7 +665,7 @@ class CTkTable(ctk.CTkFrame):
         """Shift the horizontal view left or right by a given number of pixels."""
         self._commit_edit()
         canvas_width = self._table_canvas.winfo_width()
-        _, col_offsets = self._calculate_column_geometry(canvas_width)
+        _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
         max_scroll_x = self._get_max_scroll_x(col_offsets[-1])
         self._scroll_x = max(0.0, min(max_scroll_x, self._scroll_x + delta_pixels))
         self._redraw()
@@ -772,7 +707,7 @@ class CTkTable(ctk.CTkFrame):
         """Handle clicks and drag actions from the horizontal scrollbar."""
         self._commit_edit()
         canvas_width = self._table_canvas.winfo_width()
-        _, col_offsets = self._calculate_column_geometry(canvas_width)
+        _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
         total_width = col_offsets[-1]
         max_scroll_x = self._get_max_scroll_x(total_width)
 
@@ -789,7 +724,7 @@ class CTkTable(ctk.CTkFrame):
     def _on_canvas_configure(self, _event: Any) -> None:
         """Keep the view within safe bounds and resize the header whenever the window size changes."""
         canvas_width = self._table_canvas.winfo_width()
-        _, col_offsets = self._calculate_column_geometry(canvas_width)
+        _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
         self._scroll_y = min(self._scroll_y, self._get_max_scroll_y())
         self._scroll_x = min(self._scroll_x, self._get_max_scroll_x(col_offsets[-1]))
         self._header_canvas.configure(height=self._get_scaled_header_height())
@@ -814,9 +749,9 @@ class CTkTable(ctk.CTkFrame):
                 self._scroll_y = float(target_y_bottom - canvas_height)
 
         if col is not None:
-            visible_cols = self._get_visible_columns()
+            visible_cols = self._layout_mgr.get_visible_columns()
             if col in visible_cols:
-                _, col_offsets = self._calculate_column_geometry(canvas_width)
+                _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
                 target_v = visible_cols.index(col)
                 target_x_left = col_offsets[target_v]
                 target_x_right = col_offsets[target_v + 1]
@@ -868,10 +803,10 @@ class CTkTable(ctk.CTkFrame):
         self.scroll_to(row=visual_row, col=col)
 
         canvas_width = self._table_canvas.winfo_width()
-        visible_cols = self._get_visible_columns()
+        visible_cols = self._layout_mgr.get_visible_columns()
         if col not in visible_cols:
             return
-        col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
+        col_widths, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
         v_idx = visible_cols.index(col)
         scaled_row = self._get_scaled_row_height()
 
@@ -956,8 +891,8 @@ class CTkTable(ctk.CTkFrame):
             return None
 
         canvas_width = self._table_canvas.winfo_width()
-        visible_cols = self._get_visible_columns()
-        _, col_offsets = self._calculate_column_geometry(canvas_width)
+        visible_cols = self._layout_mgr.get_visible_columns()
+        _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
         scaled_row = self._get_scaled_row_height()
 
         row = int((pixel_y + self._scroll_y) // scaled_row)
@@ -998,102 +933,6 @@ class CTkTable(ctk.CTkFrame):
         if cell is not None:
             self._start_editing(cell[0], cell[1])
 
-    def _on_enter_key(self, _event: Any) -> str:
-        """Start editing the currently focused cell when Enter is pressed."""
-        focused_r = self._selection_manager.focused_row
-        focused_c = self._selection_manager.focused_col
-        if focused_r is not None and focused_c is not None and self._is_column_editable(focused_c):
-            self._start_editing(focused_r, focused_c)
-        return "break"
-
-    def _navigate_focus(self, delta_row: int, delta_col: int, event: Any) -> str:
-        """Move keyboard focus by row and column offsets and slide the view if needed."""
-        if self._data_model.row_count == 0:
-            return "break"
-
-        visible_cols = self._get_visible_columns()
-        if not visible_cols:
-            return "break"
-
-        is_shift = bool(event.state & TK_SHIFT_MASK)
-        total_rows = self._data_model.row_count
-
-        cur_r = self._selection_manager.focused_row if self._selection_manager.focused_row is not None else 0
-        new_r = max(0, min(total_rows - 1, cur_r + delta_row))
-
-        cur_c = self._selection_manager.focused_col if self._selection_manager.focused_col is not None else visible_cols[0]
-        cur_v = visible_cols.index(cur_c) if cur_c in visible_cols else 0
-        new_v = max(0, min(len(visible_cols) - 1, cur_v + delta_col))
-        new_c = visible_cols[new_v]
-
-        use_shift = is_shift and self._selection_manager.mode == "extended"
-        self._selection_manager.apply_click(new_r, new_c, is_ctrl=False, is_shift=use_shift)
-
-        scroll_c = new_c if self._selection_manager.target == "cell" else None
-        self.scroll_to(row=new_r, col=scroll_c)
-        self._notify_command()
-        self._redraw()
-        return "break"
-
-    def _on_page_up(self, event: Any) -> str:
-        """Jump focus up by one full screen page of rows."""
-        canvas_h = self._table_canvas.winfo_height()
-        scaled_r = self._get_scaled_row_height()
-        page_rows = max(1, canvas_h // scaled_r)
-        return self._navigate_focus(-page_rows, 0, event)
-
-    def _on_page_down(self, event: Any) -> str:
-        """Jump focus down by one full screen page of rows."""
-        canvas_h = self._table_canvas.winfo_height()
-        scaled_r = self._get_scaled_row_height()
-        page_rows = max(1, canvas_h // scaled_r)
-        return self._navigate_focus(page_rows, 0, event)
-
-    def _on_home(self, event: Any) -> str:
-        """Jump focus straight to the first row."""
-        if self._data_model.row_count == 0:
-            return "break"
-        cur_row = self._selection_manager.focused_row or 0
-        return self._navigate_focus(-cur_row, 0, event)
-
-    def _on_end(self, event: Any) -> str:
-        """Jump focus straight to the last row."""
-        if self._data_model.row_count == 0:
-            return "break"
-        cur_row = self._selection_manager.focused_row or 0
-        last_row = self._data_model.row_count - 1
-        return self._navigate_focus(last_row - cur_row, 0, event)
-
-    def _on_select_all(self, _event: Any) -> str:
-        """Select every row or cell when Ctrl+A is pressed."""
-        self.select_all()
-        return "break"
-
-    def _on_space(self, _event: Any) -> str:
-        """Toggle selection on the focused item when the Space bar is pressed."""
-        focused_r = self._selection_manager.focused_row
-        if focused_r is not None and self._selection_manager.mode in (
-            "single",
-            "extended",
-        ):
-            focused_c = self._selection_manager.focused_col or 0
-            self._selection_manager.apply_click(focused_r, focused_c, is_ctrl=True, is_shift=False)
-            self._notify_command()
-            self._redraw()
-        return "break"
-
-    def _on_escape_key(self, _event: tk.Event) -> None:
-        """Cancel any active cell edit or clear the current selection when Escape is pressed."""
-        if self._editor.is_editing:
-            self._cancel_edit()
-        else:
-            self.clear_selection()
-
-    def _on_copy_shortcut(self, _event: Any = None) -> None:
-        """Copy selected items to the clipboard when Ctrl+C is pressed."""
-        if self._copyable:
-            self.copy_selection()
-
     def _notify_command(self) -> None:
         """Fire the user-provided selection callback with current selected items."""
         if self.command:
@@ -1103,214 +942,16 @@ class CTkTable(ctk.CTkFrame):
             self.command(selected)
 
     # -------------------------------------------------------------------------
-    # Column Header Mouse Handlers & Resizing
+    # Column Auto-Fit
     # -------------------------------------------------------------------------
-
-    def _set_header_sortable_rules(self, header_sortable: bool | dict[int | str, bool]) -> None:
-        """Update header sortable state, preserving baseline when 'default' is omitted in reconfigures."""
-        self._raw_header_sortable = header_sortable
-        if isinstance(header_sortable, dict):
-            default_val, resolved = self._normalize_scoped_dict(header_sortable)
-            if default_val is not None:
-                self._header_sortable_default = bool(default_val)
-            for k, v in resolved.items():
-                self._header_sortable_cols[k] = bool(v)
-        else:
-            self._header_sortable_default = bool(header_sortable)
-            self._header_sortable_cols.clear()
-
-    def _is_column_header_sortable(self, col: int) -> bool:
-        """Check whether clicking this column header is allowed to sort the table."""
-        if col in self._header_sortable_cols:
-            return self._header_sortable_cols[col]
-        return self._header_sortable_default
-
-    def _toggle_header_sort(self, col: int) -> None:
-        """Cycle column sorting between ascending, descending, and unsorted order."""
-        current_sort_col, current_asc = (
-            self._data_model.sort_column,
-            self._data_model.sort_ascending,
-        )
-        if current_sort_col == col:
-            if current_asc:
-                self.sort_by(col, ascending=False)
-            else:
-                self.clear_sort()
-        else:
-            self.sort_by(col, ascending=True)
-
-    def _set_header_cursor(self, cursor: str) -> None:
-        """Switch the header mouse cursor only when the requested icon changes."""
-        if self._current_header_cursor != cursor:
-            self._current_header_cursor = cursor
-            self._header_canvas.configure(cursor=cursor)
-
-    def _on_header_motion(self, event: Any) -> None:
-        """Update header cursor and hover highlight based on pointer position."""
-        if not self._show_headers:
-            return
-
-        canvas_width = self._table_canvas.winfo_width()
-        visible_cols = self._get_visible_columns()
-        col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
-        logical_x = event.x + self._scroll_x
-        divider_tol = scale(self, DIVIDER_HOVER_TOLERANCE)
-
-        matched = self._column_resizer.check_divider_hover(logical_x, col_offsets, divider_tol)
-        if matched is not None:
-            self._set_header_cursor("sb_h_double_arrow")
-            # Clear header hover highlight while cursor is over a divider
-            if self._hovered_header_col is not None:
-                self._hovered_header_col = None
-                self._redraw_header()
-        elif not self._column_resizer.is_resizing:
-            v_idx = bisect_right(col_offsets, logical_x) - 1
-            is_sortable = 0 <= v_idx < len(visible_cols) and self._is_column_header_sortable(visible_cols[v_idx])
-            self._set_header_cursor("hand2" if is_sortable else "")
-
-            # Check for header hover highlight if hover color is active
-            if self._header_hover_color is not None:
-                new_hover = v_idx if is_sortable else None
-                if new_hover != self._hovered_header_col:
-                    self._hovered_header_col = new_hover
-                    self._redraw_header()
-            elif self._hovered_header_col is not None:
-                self._hovered_header_col = None
-                self._redraw_header()
-
-    def _on_header_leave(self, _event: Any) -> None:
-        """Clear hovered header state and reset cursor when pointer leaves header."""
-        self._set_header_cursor("")
-        self._column_resizer.clear_hover()
-        if self._hovered_header_col is not None:
-            self._hovered_header_col = None
-            self._redraw_header()
-
-    def _on_header_click(self, event: Any) -> None:
-        """Start dragging a column divider or sort the column that was clicked."""
-        canvas_width = self._table_canvas.winfo_width()
-        visible_cols = self._get_visible_columns()
-        col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
-        if self._column_resizer.hover_divider_col is not None:
-            divider = self._column_resizer.hover_divider_col
-            logical_c = visible_cols[divider - 1]
-            self._column_resizer.start_resize(logical_c, event.x, col_widths[divider - 1])
-        else:
-            clicked_v = bisect_right(col_offsets, event.x + self._scroll_x) - 1
-            if 0 <= clicked_v < len(visible_cols):
-                logical_c = visible_cols[clicked_v]
-                if self._is_column_header_sortable(logical_c):
-                    self._toggle_header_sort(logical_c)
-
-    def _on_header_drag(self, event: Any) -> None:
-        """Resize the active column width as the user drags the mouse divider."""
-        if self._column_resizer.is_resizing:
-            min_col_w = scale(self, MIN_COLUMN_WIDTH)
-            new_w = self._column_resizer.calculate_drag_width(event.x, min_col_w)
-
-            canvas_width = self._table_canvas.winfo_width()
-            visible_cols = self._get_visible_columns()
-            col_widths, _ = self._calculate_column_geometry(canvas_width)
-            resizing_col = self._column_resizer.resizing_col
-            if resizing_col is not None:
-                if not isinstance(self._column_widths, dict):
-                    self._column_widths = {visible_cols[v]: unscale(self, w) for v, w in enumerate(col_widths)}
-                self._column_widths[resizing_col] = unscale(self, new_w)
-                self._redraw()
-
-    def _on_header_release(self, event: Any = None) -> None:
-        """Finish column resizing and refresh hover state under pointer."""
-        if self._column_resizer.is_resizing:
-            self._column_resizer.end_resize()
-        if event is not None and hasattr(event, "x"):
-            self._on_header_motion(event)
-        else:
-            self._set_header_cursor("")
-
-    def _on_header_double_click(self, event: Any = None) -> None:
-        """Snap column width to fit content and disarm drag resizing when a divider is double-clicked."""
-        canvas_width = self._table_canvas.winfo_width()
-        visible_cols = self._get_visible_columns()
-        _, col_offsets = self._calculate_column_geometry(canvas_width)
-        divider_tol = scale(self, max(DIVIDER_HOVER_TOLERANCE * 2, 8))
-        logical_x = (event.x + self._scroll_x) if (event is not None and hasattr(event, "x")) else None
-
-        divider = self._column_resizer.hover_divider_col
-        if divider is None and logical_x is not None:
-            divider = self._column_resizer.check_divider_hover(logical_x, col_offsets, divider_tol)
-
-        if divider is not None:
-            self._column_resizer.end_resize()
-            logical_c = visible_cols[divider - 1]
-            self.auto_fit_column(logical_c)
-            if event is not None and hasattr(event, "x"):
-                self._on_header_motion(event)
-        elif event is not None:
-            # Delegate rapid sequential clicks on the column header body directly to sorting
-            self._on_header_click(event)
 
     def auto_fit_columns(self, columns: list[int | str] | None = None) -> None:
         """Calculate and snap column widths to fit content in a single batched pass."""
-        total_cols = self._get_total_cols()
-        if total_cols == 0:
-            return
-
-        if columns is not None:
-            resolved_cols: list[int] = []
-            for item in columns:
-                idx = self._resolve_col_index(item)
-                if idx is not None and 0 <= idx < total_cols:
-                    resolved_cols.append(idx)
-            target_cols = resolved_cols
-        else:
-            target_cols = self._get_visible_columns()
-
-        if not target_cols:
-            return
-
-        scaled_hfont = self._apply_font_scaling(self._get_base_header_font())
-        header_font_obj = tkfont.Font(font=scaled_hfont)
-        scaled_bfont = self._apply_font_scaling(self._get_base_font())
-        body_font_obj = tkfont.Font(font=scaled_bfont)
-
-        padding = scale(self, AUTOFIT_PADDING_PX)
-        sample_rows = min(AUTOFIT_SAMPLE_ROWS, self._data_model.row_count)
-
-        if not isinstance(self._column_widths, dict):
-            canvas_width = self._table_canvas.winfo_width()
-            visible_cols = self._get_visible_columns()
-            col_widths, _ = self._calculate_column_geometry(canvas_width)
-            self._column_widths = {visible_cols[v]: unscale(self, w) for v, w in enumerate(col_widths)}
-
-        for col_index in target_cols:
-            header_text = self._headers[col_index] if (self._headers and col_index < len(self._headers)) else None
-            sample_values: list[str] = []
-            for r in range(sample_rows):
-                try:
-                    sample_values.append(str(self._data_model.get_cell(r, col_index)))
-                except IndexError:
-                    pass
-
-            # Use column-specific body and header measurement fonts
-            col_b_measure = self._cached_col_font_objs.get(col_index, body_font_obj).measure
-            col_h_measure = self._cached_header_font_objs.get(col_index, header_font_obj).measure
-
-            fitted_w = ColumnResizer.calculate_autofit_width(
-                header_text=header_text,
-                sample_values=sample_values,
-                header_measure=col_h_measure,
-                body_measure=col_b_measure,
-                padding=padding,
-                fallback_width=AUTOFIT_FALLBACK_WIDTH,
-            )
-            fit_width = unscale(self, fitted_w)
-            self._column_widths[col_index] = fit_width
-
-        self._redraw()
+        self._layout_mgr.auto_fit_columns(columns)
 
     def auto_fit_column(self, col_index: int | str) -> None:
         """Calculate and snap column width to fit header and cell text without locking other columns."""
-        self.auto_fit_columns([col_index])
+        self._layout_mgr.auto_fit_column(col_index)
 
     # -------------------------------------------------------------------------
     # Viewport Redraw Orchestrator
@@ -1325,8 +966,8 @@ class CTkTable(ctk.CTkFrame):
         if canvas_w <= 1:
             return
 
-        visible_cols = self._get_visible_columns()
-        col_widths, col_offsets = self._calculate_column_geometry(canvas_w)
+        visible_cols = self._layout_mgr.get_visible_columns()
+        col_widths, col_offsets = self._layout_mgr.calculate_geometry(canvas_w)
         total_cols = len(col_widths)
         if total_cols == 0:
             self._header_canvas.delete("all")
@@ -1366,7 +1007,7 @@ class CTkTable(ctk.CTkFrame):
             header_text_colors=self._cached_header_text_colors,
             header_fonts=self._cached_header_fonts,
             header_font_objs=self._cached_header_font_objs,
-            hovered_col=self._hovered_header_col,
+            hovered_col=self._header_controller.hovered_col,
             header_hover_color_hex=self._cached_colors.get("header_hover"),
             visible_cols=visible_cols,
         )
@@ -1378,8 +1019,8 @@ class CTkTable(ctk.CTkFrame):
         if canvas_w <= 1 or canvas_h <= 1:
             return
 
-        visible_cols = self._get_visible_columns()
-        col_widths, col_offsets = self._calculate_column_geometry(canvas_w)
+        visible_cols = self._layout_mgr.get_visible_columns()
+        col_widths, col_offsets = self._layout_mgr.calculate_geometry(canvas_w)
         total_cols = len(col_widths)
         total_rows = self._data_model.row_count
         total_content_width = col_offsets[-1]
@@ -1700,21 +1341,13 @@ class CTkTable(ctk.CTkFrame):
             case "show_headers":
                 return self._show_headers
             case "show_columns":
-                if not self._show_columns_cols:
-                    return self._show_columns_default
-                sc_res: dict[int | str, bool] = dict(self._show_columns_cols)
-                sc_res["default"] = self._show_columns_default
-                return sc_res
+                return self._layout_mgr.show_columns_setting
             case "column_widths":
-                return self._column_widths
+                return self._layout_mgr.column_widths
             case "sort_key":
                 return self._data_model.sort_key
             case "header_sortable":
-                if not self._header_sortable_cols:
-                    return self._header_sortable_default
-                h_res: dict[int | str, bool] = dict(self._header_sortable_cols)
-                h_res["default"] = self._header_sortable_default
-                return h_res
+                return self._header_controller.sortable_setting
             case "editable":
                 if not self._editable_cols:
                     return self._editable_default
@@ -1791,12 +1424,12 @@ class CTkTable(ctk.CTkFrame):
             needs_redraw = True
 
         if "show_columns" in kwargs:
-            self._set_show_columns_rules(kwargs.pop("show_columns"))
+            self._layout_mgr.set_show_columns_rules(kwargs.pop("show_columns"))
             self._scroll_x = 0.0
             needs_redraw = True
 
         if "column_widths" in kwargs:
-            self._column_widths = kwargs.pop("column_widths")
+            self._layout_mgr.column_widths = kwargs.pop("column_widths")
             self._scroll_x = 0.0
             needs_redraw = True
 
@@ -1819,7 +1452,7 @@ class CTkTable(ctk.CTkFrame):
                 self._cancel_edit()
 
         if "header_sortable" in kwargs:
-            self._set_header_sortable_rules(kwargs.pop("header_sortable"))
+            self._header_controller.set_sortable_rules(kwargs.pop("header_sortable"))
 
         if "selection_target" in kwargs:
             self._selection_manager.set_target(kwargs.pop("selection_target"))

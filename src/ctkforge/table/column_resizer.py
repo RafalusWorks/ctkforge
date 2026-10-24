@@ -56,18 +56,18 @@ class ColumnResizer:
         """Clear active divider hover state."""
         self._hover_divider_col = None
 
-    def start_resize(self, divider_index: int, mouse_x: int, current_col_width: int) -> int:
-        """Initialize a drag-resize operation for the column to the left of the divider.
+    def start_resize(self, col: int, mouse_x: int, current_col_width: int) -> int:
+        """Initialize a drag-resize operation for a column.
 
         Args:
-            divider_index: The divider index clicked by the user.
+            col: The logical index of the column to resize.
             mouse_x: The starting mouse X coordinate.
             current_col_width: The current width of the column being resized.
 
         Returns:
-            The column index (0-based) being resized.
+            The index of the column being resized.
         """
-        self._resizing_col = divider_index - 1
+        self._resizing_col = col
         self._resize_start_x = mouse_x
         self._resize_start_w = current_col_width
         return self._resizing_col

@@ -152,13 +152,13 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     # Header sortable dict and baseline preservation:
     # Baseline is True, column 0 not sortable:
     table.configure(header_sortable={0: False})
-    assert not table._is_column_header_sortable(0), "Column 0 should not be sortable"
-    assert table._is_column_header_sortable(1), "Column 1 should be sortable under True default"
+    assert not table._header_controller.is_column_sortable(0), "Column 0 should not be sortable"
+    assert table._header_controller.is_column_sortable(1), "Column 1 should be sortable under True default"
 
     # Reconfigure without 'default': baseline (True) must survive
     table.configure(header_sortable={2: False})
-    assert not table._is_column_header_sortable(2), "Column 2 should not be sortable"
-    assert table._is_column_header_sortable(1), "Column 1 should still be sortable"
+    assert not table._header_controller.is_column_sortable(2), "Column 2 should not be sortable"
+    assert table._header_controller.is_column_sortable(1), "Column 1 should still be sortable"
 
     table.configure(header_sortable=True)
     step()
@@ -208,7 +208,7 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     # 15. Auto-Fit Column & Dynamic Style Configuration
     table.auto_fit_column(1)
     step()
-    assert table._column_widths is not None, "Column widths should be computed"
+    assert table._layout_mgr.column_widths is not None, "Column widths should be computed"
     table.configure(column_widths=None)
     step()
     table.configure(row_height=34)
@@ -261,7 +261,7 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     # 19. Batched Auto-Fit Columns
     table.auto_fit_columns()
     step()
-    assert isinstance(table._column_widths, dict), "Column widths should be populated as a dict"
+    assert isinstance(table._layout_mgr.column_widths, dict), "Column widths should be populated as a dict"
     print("[19/25] Batched Auto-Fit Columns: PASSED", flush=True)
 
     # 20. Justify, Header Alignments, and Sort Key (Dict with default key)
@@ -332,70 +332,70 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
             self.y = y
 
     cw = table._table_canvas.winfo_width()
-    _, offsets = table._calculate_column_geometry(cw)
+    _, offsets = table._layout_mgr.calculate_geometry(cw)
 
     # Sortable column 1 hover sets hover highlight and hand cursor
     col1_mid_x = (offsets[1] + offsets[2]) // 2
-    table._on_header_motion(MockEvent(col1_mid_x))
-    assert table._hovered_header_col == 1
-    assert table._current_header_cursor == "hand2"
+    table._header_controller.on_motion(MockEvent(col1_mid_x))
+    assert table._header_controller.hovered_col == 1
+    assert table._header_controller.current_cursor == "hand2"
 
     # Button release over header preserves hover and hand cursor
-    table._on_header_release(MockEvent(col1_mid_x))
-    assert table._hovered_header_col == 1
-    assert table._current_header_cursor == "hand2"
+    table._header_controller.on_release(MockEvent(col1_mid_x))
+    assert table._header_controller.hovered_col == 1
+    assert table._header_controller.current_cursor == "hand2"
 
     # Rapid sequential clicks on header body toggle sorting through Double-Button-1 delegation
     table.clear_sort()
-    table._on_header_click(MockEvent(col1_mid_x))
-    table._on_header_release(MockEvent(col1_mid_x))
+    table._header_controller.on_click(MockEvent(col1_mid_x))
+    table._header_controller.on_release(MockEvent(col1_mid_x))
     assert table.get_sort_state() == (1, True)
 
     # Rapid second click arriving as Double-Button-1 toggles sort to descending
-    table._on_header_double_click(MockEvent(col1_mid_x))
-    table._on_header_release(MockEvent(col1_mid_x))
+    table._header_controller.on_double_click(MockEvent(col1_mid_x))
+    table._header_controller.on_release(MockEvent(col1_mid_x))
     assert table.get_sort_state() == (1, False)
 
     # Rapid third click arriving as Triple-Button-1 clears sort
-    table._on_header_double_click(MockEvent(col1_mid_x))
-    table._on_header_release(MockEvent(col1_mid_x))
+    table._header_controller.on_double_click(MockEvent(col1_mid_x))
+    table._header_controller.on_release(MockEvent(col1_mid_x))
     assert table.get_sort_state() == (None, True)
 
     # Unsortable column 3 hover does not highlight and keeps default arrow cursor
     col3_mid_x = (offsets[3] + offsets[4]) // 2
-    table._on_header_motion(MockEvent(col3_mid_x))
-    assert table._hovered_header_col is None
-    assert table._current_header_cursor == ""
+    table._header_controller.on_motion(MockEvent(col3_mid_x))
+    assert table._header_controller.hovered_col is None
+    assert table._header_controller.current_cursor == ""
 
     # Mouse leave resets hover highlight and restores cursor
-    table._on_header_leave(MockEvent(0))
-    assert table._hovered_header_col is None
-    assert table._current_header_cursor == ""
+    table._header_controller.on_leave(MockEvent(0))
+    assert table._header_controller.hovered_col is None
+    assert table._header_controller.current_cursor == ""
     print("[23/25] Header Hover & Interactive Pointer Dispatching: PASSED", flush=True)
 
     # 24. Divider Double-Click Auto-Fit & Resizing Drag Immunity
     div1_x = offsets[1]
-    table._on_header_motion(MockEvent(div1_x))
-    assert table._current_header_cursor == "sb_h_double_arrow"
+    table._header_controller.on_motion(MockEvent(div1_x))
+    assert table._header_controller.current_cursor == "sb_h_double_arrow"
 
     # Pressing down divider arms drag resizing
-    table._on_header_click(MockEvent(div1_x))
-    assert table._column_resizer.is_resizing
+    table._header_controller.on_click(MockEvent(div1_x))
+    assert table._header_controller.column_resizer.is_resizing
 
     # Double click auto-fits and immediately disarms drag resizing
-    table._on_header_double_click(MockEvent(div1_x))
-    assert not table._column_resizer.is_resizing
-    w_autofit = table._column_widths[0]
+    table._header_controller.on_double_click(MockEvent(div1_x))
+    assert not table._header_controller.column_resizer.is_resizing
+    w_autofit = table._layout_mgr.column_widths[0]
 
     # Subsequent motion jitter while lifting mouse button must be ignored
-    table._on_header_drag(MockEvent(div1_x + 5))
-    assert table._column_widths[0] == w_autofit
-    table._on_header_release(MockEvent(div1_x + 5))
+    table._header_controller.on_drag(MockEvent(div1_x + 5))
+    assert table._layout_mgr.column_widths[0] == w_autofit
+    table._header_controller.on_release(MockEvent(div1_x + 5))
 
     # Coordinate fallback when divider hover was momentarily cleared
-    table._column_resizer.clear_hover()
-    table._on_header_double_click(MockEvent(div1_x + 3))
-    assert table._column_widths[0] == w_autofit
+    table._header_controller.column_resizer.clear_hover()
+    table._header_controller.on_double_click(MockEvent(div1_x + 3))
+    assert table._layout_mgr.column_widths[0] == w_autofit
     print("[24/25] Divider Double-Click Auto-Fit & Drag Immunity: PASSED", flush=True)
 
     # 25. In-Place Editor Custom Font & Justify Pass-Through
@@ -533,23 +533,23 @@ def test_column_widths_flex_and_auto() -> None:
 
     # 1. Uniform int width: all columns fixed to 120px scaled
     table.configure(column_widths=120)
-    col_w, _ = table._calculate_column_geometry(600)
+    col_w, _ = table._layout_mgr.calculate_geometry(600)
     assert col_w == [scale(table, 120), scale(table, 120), scale(table, 120)]
 
     # 2. Uniform auto: all columns evenly split available canvas width (600 / 3 = 200)
     table.configure(column_widths="auto")
-    col_w, _ = table._calculate_column_geometry(600)
+    col_w, _ = table._layout_mgr.calculate_geometry(600)
     assert col_w == [200, 200, 200]
 
     # 3. None also defaults to uniform auto
     table.configure(column_widths=None)
-    col_w, _ = table._calculate_column_geometry(600)
+    col_w, _ = table._layout_mgr.calculate_geometry(600)
     assert col_w == [200, 200, 200]
 
     # 4. Dict with "default": "auto", fixed col 0 (100) and fixed col 2 (150).
     # Col 1 is auto, taking the remaining slack: 600 - scale(100) - scale(150)
     table.configure(column_widths={"default": "auto", 0: 100, 2: 150})
-    col_w, _ = table._calculate_column_geometry(600)
+    col_w, _ = table._layout_mgr.calculate_geometry(600)
     expected_w0 = scale(table, 100)
     expected_w2 = scale(table, 150)
     expected_w1 = 600 - expected_w0 - expected_w2
@@ -557,14 +557,14 @@ def test_column_widths_flex_and_auto() -> None:
 
     # 5. Dict where "default" is omitted: defaults to "auto"
     table.configure(column_widths={0: 100, 2: 150})
-    col_w, _ = table._calculate_column_geometry(600)
+    col_w, _ = table._layout_mgr.calculate_geometry(600)
     assert col_w == [expected_w0, expected_w1, expected_w2]
 
     # 6. Multiple auto columns distribute slack equally
     # Col 0 is fixed (100). Remaining slack is 600 - expected_w0.
     # Col 1 and Col 2 split slack evenly.
     table.configure(column_widths={"default": "auto", 0: 100})
-    col_w, _ = table._calculate_column_geometry(600)
+    col_w, _ = table._layout_mgr.calculate_geometry(600)
     slack = 600 - expected_w0
     assert col_w[0] == expected_w0
     assert col_w[1] + col_w[2] == slack
@@ -572,14 +572,14 @@ def test_column_widths_flex_and_auto() -> None:
 
     # 7. Fixed width below MIN_COLUMN_WIDTH (40px) clamps to min_col_w
     table.configure(column_widths={"default": "auto", 0: 15, 1: 180, 2: 170})
-    col_w, _ = table._calculate_column_geometry(600)
+    col_w, _ = table._layout_mgr.calculate_geometry(600)
     assert col_w[0] == min_w
     assert col_w[1] == scale(table, 180)
     assert col_w[2] == scale(table, 170)
 
     # 8. Viewport narrower than fixed widths clamps auto columns to min_col_w
     table.configure(column_widths={"default": "auto", 0: 200, 2: 200})
-    col_w, _ = table._calculate_column_geometry(300)
+    col_w, _ = table._layout_mgr.calculate_geometry(300)
     assert col_w[0] == scale(table, 200)
     assert col_w[1] == min_w
     assert col_w[2] == scale(table, 200)
@@ -637,13 +637,13 @@ def test_show_headers_visibility() -> None:
     assert table3._header_canvas.winfo_ismapped()
 
     # Click col 0 header to sort ascending
-    table3._on_header_click(Event(x=20))
+    table3._header_controller.on_click(Event(x=20))
     root.update()
     assert table3.get_sort_state() == (0, True)
     assert table3.get_cell(0, 0) == 10
 
     # Click col 0 header again to sort descending
-    table3._on_header_click(Event(x=20))
+    table3._header_controller.on_click(Event(x=20))
     root.update()
     assert table3.get_sort_state() == (0, False)
     assert table3.get_cell(0, 0) == 20
@@ -770,9 +770,9 @@ def test_show_columns_visibility_and_interaction() -> None:
     root.update()
 
     # 1. Active visible columns should only be [0, 1, 4] ("ID", "Name", "Status")
-    assert table._get_visible_columns() == [0, 1, 4]
+    assert table._layout_mgr.get_visible_columns() == [0, 1, 4]
     cw = table._table_canvas.winfo_width()
-    col_w, col_offsets = table._calculate_column_geometry(cw)
+    col_w, col_offsets = table._layout_mgr.calculate_geometry(cw)
     assert len(col_w) == 3
     assert len(col_offsets) == 4
 
@@ -784,20 +784,20 @@ def test_show_columns_visibility_and_interaction() -> None:
     # 3. Dynamic toggle via configure: hide Name (1) and show Salary (3)
     table.configure(show_columns={"Name": False, "Salary": True})
     root.update()
-    assert table._get_visible_columns() == [0, 3, 4]
+    assert table._layout_mgr.get_visible_columns() == [0, 3, 4]
 
     # 4. Hide all columns: show_columns=False
     table.configure(show_columns=False)
     root.update()
-    assert table._get_visible_columns() == []
-    cw, co = table._calculate_column_geometry(600)
+    assert table._layout_mgr.get_visible_columns() == []
+    cw, co = table._layout_mgr.calculate_geometry(600)
     assert cw == []
     assert co == [0]
 
     # 5. Restore all columns: show_columns=True
     table.configure(show_columns=True)
     root.update()
-    assert table._get_visible_columns() == [0, 1, 2, 3, 4]
+    assert table._layout_mgr.get_visible_columns() == [0, 1, 2, 3, 4]
 
     table.destroy()
     root.destroy()
@@ -842,8 +842,8 @@ def test_named_header_keys_scoped_attributes() -> None:
     assert table._is_column_editable(3) is False
 
     # Verify header_sortable resolved "Status" -> 4
-    assert table._is_column_header_sortable(0) is True
-    assert table._is_column_header_sortable(4) is False
+    assert table._header_controller.is_column_sortable(0) is True
+    assert table._header_controller.is_column_sortable(4) is False
 
     # Verify justify resolved "ID" -> 0, "Salary" -> 3
     alignments = table._get_normalized_column_alignments()
@@ -865,9 +865,125 @@ def test_named_header_keys_scoped_attributes() -> None:
     assert h_align[3] == "right"
 
     # Verify show_columns resolved "Department" -> 2
-    assert table._is_column_shown(2) is False
-    assert table._is_column_shown(0) is True
-    assert table._get_visible_columns() == [0, 1, 3, 4]
+    assert table._layout_mgr.is_column_shown(2) is False
+    assert table._layout_mgr.is_column_shown(0) is True
+    assert table._layout_mgr.get_visible_columns() == [0, 1, 3, 4]
+
+    table.destroy()
+    root.destroy()
+
+
+def test_keyboard_navigation_and_shortcuts() -> None:
+    """Verify arrow, paging, Home/End, Space, Escape, and Ctrl+A keys move focus and change selection."""
+    root = ctk.CTk()
+    root.geometry("800x500+9999+9999")
+
+    table = CTkTable(
+        root,
+        headers=["ID", "Name", "Department", "Salary"],
+        values=[[i, f"Name {i}", "Dept", i * 1000] for i in range(100)],
+        selection_mode="extended",
+        show_columns={"Department": False},
+        selection_target="cell",
+    )
+    table.pack(fill="both", expand=True)
+    root.update()
+    table._table_canvas.focus_force()
+    root.update()
+
+    def press(key: str) -> None:
+        table._table_canvas.event_generate(key)
+        root.update()
+
+    selection = table._selection_manager
+
+    # With no prior focus, navigation starts from the first visible cell and moves one step per press
+    press("<Down>")
+    assert (selection.focused_row, selection.focused_col) == (1, 0)
+    press("<Down>")
+    press("<Right>")
+    assert (selection.focused_row, selection.focused_col) == (2, 1)
+
+    # Moving right from Name skips the hidden Department column and lands on Salary
+    press("<Right>")
+    assert selection.focused_col == 3
+
+    # Moving past the last column or the first row stays put
+    press("<Right>")
+    assert selection.focused_col == 3
+    press("<Home>")
+    assert selection.focused_row == 0
+    press("<Up>")
+    assert selection.focused_row == 0
+
+    # End jumps to the last row, and Page Up moves back by a screenful
+    press("<End>")
+    assert selection.focused_row == 99
+    page_rows = table._get_page_row_count()
+    press("<Prior>")
+    assert selection.focused_row == 99 - page_rows
+    press("<Next>")
+    assert selection.focused_row == 99
+
+    # Navigation selects the focused cell, so Space toggles it off and then back on
+    assert selection.selected_cells == {(99, 3)}
+    press("<space>")
+    assert not selection.selected_cells
+    press("<space>")
+    assert selection.selected_cells == {(99, 3)}
+
+    # Escape clears the selection
+    press("<Escape>")
+    assert not selection.selected_cells
+
+    # Ctrl+A selects everything
+    press("<Control-a>")
+    assert len(selection.selected_cells) == 100 * 4
+
+    table.destroy()
+    root.destroy()
+
+
+def test_divider_drag_resizes_column_left_of_divider() -> None:
+    """Verify dragging a divider widens only the column on its left, even when columns are hidden."""
+    root = ctk.CTk()
+    root.geometry("900x500+9999+9999")
+
+    table = CTkTable(
+        root,
+        headers=["ID", "Name", "Department", "Salary", "Status"],
+        values=[[1, "Alice", "Engineering", 120000, "Active"]],
+        show_columns={"Name": False},
+    )
+    table.pack(fill="both", expand=True)
+    root.update()
+
+    class MockEvent:
+        def __init__(self, x: int) -> None:
+            self.x = x
+            self.y = 10
+
+    header = table._header_controller
+    visible_cols = table._layout_mgr.get_visible_columns()
+    assert visible_cols == [0, 2, 3, 4]
+
+    for divider in range(1, len(visible_cols)):
+        table.configure(column_widths={"default": 120})
+        root.update()
+        _, offsets = table._layout_mgr.calculate_geometry(table._table_canvas.winfo_width())
+        divider_x = offsets[divider]
+
+        header.on_motion(MockEvent(divider_x))
+        header.on_click(MockEvent(divider_x))
+        assert header.column_resizer.resizing_col == visible_cols[divider - 1]
+
+        header.on_drag(MockEvent(divider_x + 60))
+        header.on_release(MockEvent(divider_x + 60))
+
+        widths = table.cget("column_widths")
+        resized = {col for col in widths if col != "default"}
+        assert resized == {visible_cols[divider - 1]}
+        assert widths[visible_cols[divider - 1]] > 120
 
     table.destroy()
     root.destroy()
@@ -883,3 +999,5 @@ if __name__ == "__main__":
     test_copy_selection_asymmetric_column_and_row_lengths()
     test_show_columns_visibility_and_interaction()
     test_named_header_keys_scoped_attributes()
+    test_keyboard_navigation_and_shortcuts()
+    test_divider_drag_resizes_column_left_of_divider()
