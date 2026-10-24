@@ -77,8 +77,7 @@ def resource_path(relative_path: str | Path, *, strict: bool = False) -> Path | 
     if strict:
         searched_paths = "\n  - ".join(str(p) for p in checked)
         raise FileNotFoundError(
-            f"Resource '{relative_path}' could not be resolved.\n"
-            f"Checked locations:\n  - {searched_paths}"
+            f"Resource '{relative_path}' could not be resolved.\nChecked locations:\n  - {searched_paths}"
         )
 
     return None

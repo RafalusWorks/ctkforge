@@ -42,4 +42,3 @@ def on_closing() -> None:
 
 app.protocol("WM_DELETE_WINDOW", on_closing)
 app.mainloop()
-

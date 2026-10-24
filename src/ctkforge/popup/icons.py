@@ -111,8 +111,7 @@ def resolve_icon(
 
     # Fall back to preset stock icon if custom icon cannot be resolved
     print(
-        f"[CTkPopup Warning]: Custom icon '{icon_input}' could not be resolved. "
-        f"Falling back to preset stock icon.",
+        f"[CTkPopup Warning]: Custom icon '{icon_input}' could not be resolved. Falling back to preset stock icon.",
         file=sys.stderr,
     )
 

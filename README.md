@@ -27,7 +27,7 @@ pip install ctkforge
 
 Runnable example scripts are available in the [`examples/`](examples/) folder:
 
-* [`demo_ctktable_basic.py`](examples/demo_ctktable_basic.py) — Table sorting, editing, and selection
+* [`example_ctktable.py`](examples/example_ctktable.py) — Table sorting, editing, and selection
 * [`demo_ctkpopup_basic.py`](examples/demo_ctkpopup_basic.py) — Modal dialog presets and result handling
 * [`demo_ctkspinbox.py`](examples/demo_ctkspinbox.py) — Number steppers and styling variations
 * [`demo_ctktable_clipboard_and_crud.py`](examples/demo_ctktable_clipboard_and_crud.py) — Advanced table CRUD and clipboard integration

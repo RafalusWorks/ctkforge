@@ -42,20 +42,10 @@ class CTkSpinbox(ctk.CTkFrame):
         **kwargs: Any,
     ) -> None:
         theme = ctk.ThemeManager.theme
-        resolved_corner_radius = (
-            theme["CTkEntry"]["corner_radius"]
-            if corner_radius is None
-            else corner_radius
-        )
-        resolved_border_width = (
-            theme["CTkEntry"]["border_width"] if border_width is None else border_width
-        )
-        resolved_fg_color = (
-            theme["CTkEntry"]["fg_color"] if fg_color is None else fg_color
-        )
-        resolved_border_color = (
-            theme["CTkEntry"]["border_color"] if border_color is None else border_color
-        )
+        resolved_corner_radius = theme["CTkEntry"]["corner_radius"] if corner_radius is None else corner_radius
+        resolved_border_width = theme["CTkEntry"]["border_width"] if border_width is None else border_width
+        resolved_fg_color = theme["CTkEntry"]["fg_color"] if fg_color is None else fg_color
+        resolved_border_color = theme["CTkEntry"]["border_color"] if border_color is None else border_color
 
         super().__init__(
             master,
@@ -78,16 +68,10 @@ class CTkSpinbox(ctk.CTkFrame):
 
         # Typography and colors
         self._font = font if font is not None else ctk.CTkFont(size=13)
-        self._text_color = (
-            theme["CTkEntry"]["text_color"] if text_color is None else text_color
-        )
-        self._button_color = (
-            theme["CTkButton"]["fg_color"] if button_color is None else button_color
-        )
+        self._text_color = theme["CTkEntry"]["text_color"] if text_color is None else text_color
+        self._button_color = theme["CTkButton"]["fg_color"] if button_color is None else button_color
         self._button_hover_color = (
-            theme["CTkButton"]["hover_color"]
-            if button_hover_color is None
-            else button_hover_color
+            theme["CTkButton"]["hover_color"] if button_hover_color is None else button_hover_color
         )
 
         # Enforce exact bounding dimensions like CTkComboBox

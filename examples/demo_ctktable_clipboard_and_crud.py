@@ -42,18 +42,19 @@ TABLE_HEADERS: Final[list[str]] = [
     "Status",
 ]
 
-COLUMN_WIDTHS: Final[list[int]] = [
-    130,  # Transaction ID
-    150,  # Date & Time
-    160,  # Customer Name
-    210,  # Customer Email
-    150,  # Category
-    130,  # Product SKU
-    80,  # Quantity
-    100,  # Unit Price
-    120,  # Total Amount
-    110,  # Status
-]
+COLUMN_WIDTHS: Final[dict[int | str, int | str]] = {
+    "default": "auto",
+    0: 130,  # Transaction ID
+    1: 150,  # Date & Time
+    2: 160,  # Customer Name
+    3: 210,  # Customer Email
+    4: 150,  # Category
+    5: 130,  # Product SKU
+    6: 80,  # Quantity
+    7: 100,  # Unit Price
+    8: 120,  # Total Amount
+    9: 110,  # Status
+}
 
 TABLE_SORT_KEY: Final[dict[int | str, str]] = {
     "default": "str",

@@ -84,9 +84,7 @@ class DemoApp(ctk.CTk):
         container.grid_columnconfigure((0, 1), weight=1)
 
         # Section 1: Presets
-        self._add_section_header(
-            container, "1. Core Presets (The Single CTkPopup Habit)", row=0
-        )
+        self._add_section_header(container, "1. Core Presets (The Single CTkPopup Habit)", row=0)
 
         ctk.CTkButton(
             container,
@@ -154,9 +152,7 @@ class DemoApp(ctk.CTk):
         ).grid(row=3, column=0, padx=10, pady=6, sticky="ew")
 
         # Section 2: Semantic Roles & Custom Buttons
-        self._add_section_header(
-            container, "2. Semantic Roles & Custom Button Lists", row=4
-        )
+        self._add_section_header(container, "2. Semantic Roles & Custom Button Lists", row=4)
 
         ctk.CTkButton(
             container,
@@ -171,9 +167,7 @@ class DemoApp(ctk.CTk):
         ).grid(row=5, column=1, padx=10, pady=6, sticky="ew")
 
         # Section 3: Visual Height Calibration (300px Threshold Test)
-        self._add_section_header(
-            container, "3. Visual Height Calibration (300px Rule)", row=6
-        )
+        self._add_section_header(container, "3. Visual Height Calibration (300px Rule)", row=6)
 
         ctk.CTkButton(
             container,
@@ -188,9 +182,7 @@ class DemoApp(ctk.CTk):
         ).grid(row=7, column=1, padx=10, pady=6, sticky="ew")
 
         # Section 4: Asynchronous & Delayed Screen Centering Tests
-        self._add_section_header(
-            container, "4. Async Mode & Delayed Screen Centering", row=8
-        )
+        self._add_section_header(container, "4. Async Mode & Delayed Screen Centering", row=8)
 
         ctk.CTkButton(
             container,
@@ -211,9 +203,7 @@ class DemoApp(ctk.CTk):
         footer.grid(row=2, column=0, sticky="ew", padx=24, pady=(6, 20))
         footer.grid_columnconfigure(1, weight=1)
 
-        status_title = ctk.CTkLabel(
-            footer, text="Last Return Value:", font=ctk.CTkFont(weight="bold")
-        )
+        status_title = ctk.CTkLabel(footer, text="Last Return Value:", font=ctk.CTkFont(weight="bold"))
         status_title.grid(row=0, column=0, padx=(16, 8), pady=12)
 
         self.status_display = ctk.CTkLabel(
@@ -287,9 +277,7 @@ class DemoApp(ctk.CTk):
             "It easily fits under the 300px ceiling, so it renders cleanly "
             "as a centered, lightweight text label without scrollbars."
         )
-        popup = CTkPopup(
-            master=self, title="Short Message Test", text=text, preset="info"
-        )
+        popup = CTkPopup(master=self, title="Short Message Test", text=text, preset="info")
         self._log(popup.get())
 
     def _test_long_traceback(self) -> None:
