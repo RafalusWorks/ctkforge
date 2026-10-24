@@ -1,8 +1,7 @@
 """Calculates cell and row selections from clicks, tracks keyboard navigation, and exports text for copying.
 
-This module provides the SelectionManager class to handle single, multiple, and range
-selections using mouse clicks and arrow keys. It also formats selected cells into
-tab-separated text ready for the clipboard.
+Handles single, multiple, and range selections using mouse clicks and arrow keys.
+Formats selected cells into tab-separated text ready for the clipboard.
 """
 
 from typing import Any, Literal
@@ -18,6 +17,7 @@ class SelectionManager:
         target: Literal["row", "cell"] = "row",
         mode: Literal["single", "extended", "none"] = "single",
     ) -> None:
+        """Initialize selection state, target mode, and focus tracking."""
         self._selected_rows: set[int] = set()
         self._selected_cells: set[tuple[int, int]] = set()
 
@@ -74,6 +74,7 @@ class SelectionManager:
 
     @focused_row.setter
     def focused_row(self, row: int | None) -> None:
+        """Set the current display row holding keyboard focus."""
         self._focused_row = row
 
     @property
@@ -83,6 +84,7 @@ class SelectionManager:
 
     @focused_col.setter
     def focused_col(self, col: int | None) -> None:
+        """Set the current column index holding keyboard focus."""
         self._focused_col = col
 
     def clear(self) -> None:

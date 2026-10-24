@@ -1,8 +1,7 @@
 """Detects column divider hover, manages mouse drag resizing, and calculates auto-fit widths.
 
-This module provides the ColumnResizer class to track divider boundaries, calculate
-new column widths during mouse drag operations, and measure text to find the best
-column width automatically.
+Tracks divider boundaries, calculates new column widths during mouse drag operations,
+and measures text to find the best column width automatically.
 """
 
 from collections.abc import Callable
@@ -12,6 +11,7 @@ class ColumnResizer:
     """Manages the interactive dragging, hover detection, and auto-fitting of table columns."""
 
     def __init__(self) -> None:
+        """Initialize divider drag tracking and hover state."""
         self._hover_divider_col: int | None = None
         self._resizing_col: int | None = None
         self._resize_start_x: int = 0

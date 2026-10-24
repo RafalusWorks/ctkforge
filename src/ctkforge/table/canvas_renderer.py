@@ -1,8 +1,8 @@
 """Renders table headers, visible cell rows, selection highlights, and focus outlines onto Tkinter canvases.
 
-This module provides the TableRenderer class, which paints column headers,
-alternating row backgrounds, cell text, grid dividers, and focus rings. It also
-trims overflowing text neatly with an ellipsis when columns are too narrow.
+Paints column headers, alternating row backgrounds, cell text, grid dividers,
+and focus rings. Trims overflowing text neatly with an ellipsis when columns
+are too narrow.
 """
 
 import tkinter as tk

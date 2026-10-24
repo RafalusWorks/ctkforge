@@ -7,7 +7,7 @@ TK_SHIFT_MASK: Final[int] = 0x0001
 TK_CONTROL_MASK: Final[int] = 0x0004
 
 # Engine dimension & threshold defaults
-MIN_COLUMN_WIDTH: Final[int] = 40
+MIN_COLUMN_WIDTH: Final[int] = 50
 MIN_ROW_HEIGHT: Final[int] = 16
 MIN_HEADER_HEIGHT: Final[int] = 20
 DIVIDER_HOVER_TOLERANCE: Final[int] = 6

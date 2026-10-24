@@ -1,8 +1,7 @@
 """Manages a single floating CTkEntry text box positioned over an individual cell during in-place editing.
 
-This module provides the CellEditor class, which creates the temporary text box,
-handles keyboard keys like Enter and Escape, commits or cancels cell edits, and
-cleanly destroys the input box when editing finishes.
+Creates the temporary text box, handles keyboard keys like Enter and Escape,
+commits or cancels cell edits, and cleanly destroys the input box when editing finishes.
 """
 
 import tkinter as tk
@@ -24,6 +23,7 @@ class CellEditor:
         on_commit: Callable[[], None],
         on_cancel: Callable[[], None],
     ) -> None:
+        """Initialize editor state and callback hooks."""
         self._canvas: tk.Canvas = canvas
         self._on_commit: Callable[[], None] = on_commit
         self._on_cancel: Callable[[], None] = on_cancel
@@ -121,5 +121,6 @@ class CellEditor:
 
     @staticmethod
     def _safe_destroy_widget(widget: Any) -> None:
+        """Destroy a widget safely, ignoring teardown errors if already destroyed."""
         with suppress(tk.TclError, AttributeError, RuntimeError):
             widget.destroy()

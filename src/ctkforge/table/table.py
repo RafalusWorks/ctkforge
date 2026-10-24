@@ -5,18 +5,17 @@ Repository: https://github.com/RafalusWorks/ctkforge
 """
 
 import tkinter as tk
-import tkinter.font as tkfont
 from bisect import bisect_left, bisect_right
 from collections.abc import Callable, Sequence
 from contextlib import suppress
-from typing import Any, Literal, overload, override
+from typing import Any, Final, Literal, overload, override
 
 import customtkinter as ctk
 
 from ctkforge.geometry import scale
 from ctkforge.table.canvas_renderer import TableRenderer
 from ctkforge.table.cell_editor import CellEditor
-from ctkforge.table.column_layout import ColumnLayoutManager, TextMeasureLookup
+from ctkforge.table.column_layout import ColumnLayoutManager
 from ctkforge.table.constants import (
     CELL_HORIZONTAL_PADDING,
     DEFAULT_BORDER_SPACING,
@@ -24,20 +23,43 @@ from ctkforge.table.constants import (
     DEFAULT_OVERSCAN_COLS,
     DEFAULT_OVERSCAN_ROWS,
     DEFAULT_ROW_HEIGHT,
-    HORIZONTAL_SCROLL_STEP_PX,
     MIN_HEADER_HEIGHT,
     MIN_ROW_HEIGHT,
-    MOUSEWHEEL_BASE_DELTA,
-    MOUSEWHEEL_STEP_ROWS,
     TK_CONTROL_MASK,
     TK_SHIFT_MASK,
 )
 from ctkforge.table.data_model import TableDataModel
 from ctkforge.table.header_controller import HeaderController
 from ctkforge.table.keyboard_router import KeyboardRouter
+from ctkforge.table.scroll_controller import ScrollController
 from ctkforge.table.selection_manager import SelectionManager
+from ctkforge.table.style_resolver import STYLE_OPTIONS, StyleResolver
 
 __all__ = ["CTkTable"]
+
+_REDRAW_OPTIONS: Final[frozenset[str]] = frozenset(
+    {
+        "values",
+        "headers",
+        "show_headers",
+        "show_columns",
+        "column_widths",
+        "selection_target",
+        "selection_mode",
+        "row_height",
+        "header_height",
+        "border_spacing",
+        "sort_key",
+    }
+)
+
+_REGRID_OPTIONS: Final[frozenset[str]] = frozenset(
+    {
+        "headers",
+        "show_headers",
+        "border_spacing",
+    }
+)
 
 
 class CTkTable(ctk.CTkFrame):
@@ -91,6 +113,7 @@ class CTkTable(ctk.CTkFrame):
         on_cell_edit: Callable[[int, int, Any, Any], None] | None = None,
         **kwargs: Any,
     ) -> None:
+        """Create a virtualized data table widget with headers, scrolling, selection, and cell editing."""
         theme = ctk.ThemeManager.theme
         resolved_corner_radius = theme["CTkFrame"]["corner_radius"] if corner_radius is None else corner_radius
         resolved_border_width = theme["CTkFrame"]["border_width"] if border_width is None else border_width
@@ -123,6 +146,29 @@ class CTkTable(ctk.CTkFrame):
         self._apply_headers(headers, initial_cols=initial_cols)
         self._show_headers: bool = (headers is not None) if show_headers is None else bool(show_headers)
 
+        # Colors, fonts, alignment, and per-column setting lookup
+        self._style = StyleResolver(
+            options={
+                "font": font,
+                "header_font": header_font,
+                "text_color": text_color,
+                "header_text_color": header_text_color,
+                "selected_color": selected_color,
+                "selected_text_color": selected_text_color,
+                "header_fg_color": header_fg_color,
+                "row_color": row_color,
+                "alternate_row_color": alternate_row_color,
+                "header_hover_color": header_hover_color,
+                "justify": justify,
+                "header_alignment": header_alignment,
+            },
+            divider_color=resolved_border_color,
+            get_headers=lambda: self._headers,
+            get_total_cols=self._get_total_cols,
+            get_frame_color=lambda: self._fg_color,
+            apply_font_scaling=self._apply_font_scaling,
+        )
+
         # Core Collaborator Engines
         self._raw_sort_key = sort_key
         self._data_model = TableDataModel(
@@ -139,16 +185,11 @@ class CTkTable(ctk.CTkFrame):
             get_total_cols=self._get_total_cols,
             get_headers=lambda: self._headers,
             get_canvas_width=lambda: self._table_canvas.winfo_width(),
-            normalize_scoped_dict=self._normalize_scoped_dict,
-            resolve_col_index=self._resolve_col_index,
-            create_text_measure_lookup=self._create_text_measure_lookup,
+            normalize_scoped_dict=self._style.normalize_scoped_dict,
+            resolve_col_index=self._style.resolve_col_index,
+            create_text_measure_lookup=self._style.create_text_measure_lookup,
             on_layout_changed=self._redraw,
         )
-
-        # Column body styling
-        self._justify = justify
-        self._header_alignment = header_alignment
-        self._header_hover_color = header_hover_color
 
         # Editing rules
         self._editable_default: bool = False
@@ -162,37 +203,38 @@ class CTkTable(ctk.CTkFrame):
         self.command: Callable[[Any], None] | None = command
         self._copyable: bool = copyable
 
-        # Typography & Color tokens
-        self._font: tuple[str, int] | ctk.CTkFont = ctk.CTkFont() if font is None else font
-        self._header_font: tuple[str, int] | ctk.CTkFont = (
-            ctk.CTkFont(weight="bold") if header_font is None else header_font
-        )
-        self._text_color: Any = theme["CTkLabel"]["text_color"] if text_color is None else text_color
-        self._header_text_color: Any = (
-            theme["CTkLabel"]["text_color"] if header_text_color is None else header_text_color
-        )
-        self._selected_color: str | tuple[str, str] = (
-            theme["CTkButton"]["fg_color"] if selected_color is None else selected_color
-        )
-        self._selected_text_color: str | tuple[str, str] = (
-            theme["CTkButton"]["text_color"] if selected_text_color is None else selected_text_color
-        )
-        self._header_fg_color: str | tuple[str, str] | list[str] = (
-            theme["CTkFrame"].get("top_fg_color", theme["CTkFrame"]["fg_color"])
-            if header_fg_color is None
-            else header_fg_color
-        )
-        self._row_color: str | tuple[str, str] | None = row_color
-        self._alternate_row_color: str | tuple[str, str] | None = alternate_row_color
-        self._divider_color: str | tuple[str, str] | list[str] = (
-            border_color if border_color is not None else theme["CTkFrame"]["border_color"]
+        # Grid, header and body canvases, scrollbars, and corner fillers
+        self._create_widgets()
+
+        # Scroll position, mouse wheel, and scrollbar handling
+        self._scroll_controller = self._create_scroll_controller()
+
+        # In-place cell editing text box
+        self._editor = CellEditor(
+            canvas=self._table_canvas,
+            on_commit=self._commit_edit,
+            on_cancel=self._cancel_edit,
         )
 
-        # Virtual scroll coordinates
-        self._scroll_y: float = 0.0
-        self._scroll_x: float = 0.0
+        # Keyboard navigation and shortcuts
+        self._keyboard_router = self._create_keyboard_router()
 
-        # Grid configuration
+        # Header hover, click sorting, and divider dragging
+        self._header_controller = self._create_header_controller(header_sortable)
+
+        self._option_setters = self._create_option_setters()
+        self._option_getters = self._create_option_getters()
+
+        self._re_grid_components()
+        self._setup_event_bindings()
+        self._update_colors()
+
+    # -------------------------------------------------------------------------
+    # Component Construction
+    # -------------------------------------------------------------------------
+
+    def _create_widgets(self) -> None:
+        """Build the grid, the header and body canvases, the scrollbars, and the corner fillers."""
         self.grid_propagate(False)
         self.grid_rowconfigure(0, weight=0)
         self.grid_rowconfigure(1, weight=1)
@@ -200,7 +242,6 @@ class CTkTable(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_columnconfigure(1, weight=0)
 
-        # Header and Body Viewport Canvases
         self._header_canvas = tk.Canvas(
             self,
             highlightthickness=0,
@@ -210,25 +251,36 @@ class CTkTable(ctk.CTkFrame):
         self._header_corner = tk.Frame(self, highlightthickness=0, bd=0)
         self._table_canvas = tk.Canvas(self, highlightthickness=0, bd=0, takefocus=1)
 
-        self._v_scrollbar = ctk.CTkScrollbar(self, orientation="vertical", command=self._on_v_scrollbar_command)
-        self._h_scrollbar = ctk.CTkScrollbar(self, orientation="horizontal", command=self._on_h_scrollbar_command)
+        self._v_scrollbar = ctk.CTkScrollbar(self, orientation="vertical")
+        self._h_scrollbar = ctk.CTkScrollbar(self, orientation="horizontal")
         self._bottom_corner = tk.Frame(self, highlightthickness=0, bd=0)
 
-        self._editor = CellEditor(
-            canvas=self._table_canvas,
-            on_commit=self._commit_edit,
-            on_cancel=self._cancel_edit,
+    def _create_scroll_controller(self) -> ScrollController:
+        """Build the controller that tracks scroll position, mouse wheel, and scrollbars."""
+        return ScrollController(
+            self,
+            self._table_canvas,
+            self._header_canvas,
+            self._v_scrollbar,
+            self._h_scrollbar,
+            self._data_model,
+            self._layout_mgr,
+            get_row_height=self._get_scaled_row_height,
+            commit_edit=self._commit_edit,
+            redraw=self._redraw,
+            on_viewport_resized=self._on_viewport_resized,
         )
 
-        # Keyboard navigation and shortcuts
-        self._keyboard_router = KeyboardRouter(
+    def _create_keyboard_router(self) -> KeyboardRouter:
+        """Build the router that turns key presses into focus moves, selections, edits, and copying."""
+        return KeyboardRouter(
             self._data_model,
             self._selection_manager,
             self._layout_mgr,
-            get_page_row_count=self._get_page_row_count,
+            get_page_row_count=self._scroll_controller.get_page_row_count,
             is_editing=lambda: self._editor.is_editing,
             is_copyable=lambda: self._copyable,
-            scroll_to=lambda row, col: self.scroll_to(row=row, col=col),
+            scroll_to=self._scroll_controller.scroll_to,
             start_editing=self._start_editing,
             cancel_edit=self._cancel_edit,
             select_all=self.select_all,
@@ -238,37 +290,24 @@ class CTkTable(ctk.CTkFrame):
             redraw=self._redraw,
         )
 
-        # Header hover, click sorting, and divider dragging
-        self._header_controller = HeaderController(
+    def _create_header_controller(self, header_sortable: bool | dict[int | str, bool]) -> HeaderController:
+        """Build the controller that handles header hover, click sorting, and divider dragging."""
+        return HeaderController(
             self,
             self._header_canvas,
             self._data_model,
             self._layout_mgr,
             header_sortable=header_sortable,
-            normalize_scoped_dict=self._normalize_scoped_dict,
+            normalize_scoped_dict=self._style.normalize_scoped_dict,
             is_header_visible=lambda: self._show_headers,
-            has_hover_color=lambda: self._header_hover_color is not None,
+            has_hover_color=lambda: self._style.has_header_hover_color,
             get_canvas_width=lambda: self._table_canvas.winfo_width(),
-            get_scroll_x=lambda: self._scroll_x,
+            get_scroll_x=lambda: self._scroll_controller.scroll_x,
             sort_by=lambda col, ascending: self.sort_by(col, ascending=ascending),
             clear_sort=self.clear_sort,
             redraw_header=self._redraw_header,
             redraw=self._redraw,
         )
-
-        # Pre-resolved color and font caches for high performance
-        self._cached_colors: dict[str, str] = {}
-        self._cached_col_text_colors: dict[int, str] = {}
-        self._cached_header_text_colors: dict[int, str] = {}
-        self._cached_col_fonts: dict[int, Any] = {}
-        self._cached_col_font_objs: dict[int, tkfont.Font] = {}
-        self._cached_header_fonts: dict[int, Any] = {}
-        self._cached_header_font_objs: dict[int, tkfont.Font] = {}
-
-        self._re_grid_components()
-        self._setup_event_bindings()
-        self._update_colors()
-        self._update_fonts()
 
     # -------------------------------------------------------------------------
     # Event Bindings Setup
@@ -276,12 +315,7 @@ class CTkTable(ctk.CTkFrame):
 
     def _setup_event_bindings(self) -> None:
         """Register mouse, keyboard, resize, and edit handlers across canvases."""
-        self._table_canvas.bind("<Configure>", self._on_canvas_configure)
-        self._table_canvas.bind("<MouseWheel>", self._on_mousewheel_v)
-        self._table_canvas.bind("<Shift-MouseWheel>", self._on_mousewheel_h)
-
-        self._header_canvas.bind("<MouseWheel>", self._on_mousewheel_v)
-        self._header_canvas.bind("<Shift-MouseWheel>", self._on_mousewheel_h)
+        self._scroll_controller.bind_events()
 
         self._table_canvas.bind("<Button-1>", self._on_body_click)
         self._table_canvas.bind("<Double-Button-1>", self._on_body_double_click)
@@ -291,232 +325,13 @@ class CTkTable(ctk.CTkFrame):
         self._header_controller.bind_events()
 
     # -------------------------------------------------------------------------
-    # Color & Layout Configuration
+    # Scoped Attribute Normalization
     # -------------------------------------------------------------------------
-
-    def _resolve_color(self, color: Any) -> str:
-        """Resolve a CustomTkinter light/dark color tuple into a hex string for Tk canvas."""
-        if color is None:
-            return ""
-        if isinstance(color, dict):
-            return self._resolve_color(color.get("default", ""))
-        if isinstance(color, (tuple, list)):
-            mode = ctk.get_appearance_mode()
-            return color[1] if mode == "Dark" else color[0]
-        return str(color)
-
-    def _update_colors(self) -> None:
-        """Synchronize raw Tkinter canvas backgrounds and cache resolved theme colors."""
-        canvas_bg = self._resolve_color(self._fg_color)
-        if not canvas_bg or canvas_bg == "transparent":
-            canvas_bg = self._resolve_color(ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-        self._table_canvas.configure(bg=canvas_bg)
-        self._header_canvas.configure(bg=canvas_bg)
-        self._header_corner.configure(bg=canvas_bg)
-        self._bottom_corner.configure(bg=canvas_bg)
-
-        base_color = self._row_color if self._row_color is not None else self._fg_color
-        alt_color = self._alternate_row_color if self._alternate_row_color is not None else base_color
-
-        default_text_color = self._text_color
-        if isinstance(self._text_color, dict):
-            default_text_color = self._text_color.get("default", ctk.ThemeManager.theme["CTkLabel"]["text_color"])
-
-        default_header_text_color = self._header_text_color
-        if isinstance(self._header_text_color, dict):
-            default_header_text_color = self._header_text_color.get(
-                "default", ctk.ThemeManager.theme["CTkLabel"]["text_color"]
-            )
-
-        self._cached_colors = {
-            "header_fg": self._resolve_color(self._header_fg_color),
-            "header_text": self._resolve_color(default_header_text_color),
-            "divider": self._resolve_color(self._divider_color),
-            "text": self._resolve_color(default_text_color),
-            "selected_bg": self._resolve_color(self._selected_color),
-            "selected_text": self._resolve_color(self._selected_text_color),
-            "row_even": self._resolve_color(base_color),
-            "row_odd": self._resolve_color(alt_color),
-        }
-        if self._header_hover_color is not None:
-            self._cached_colors["header_hover"] = self._resolve_color(self._header_hover_color)
-        else:
-            self._cached_colors.pop("header_hover", None)
-
-        # Pre-resolve per-column and per-header text colors into hex strings
-        self._cached_col_text_colors = {
-            c: self._resolve_color(col) for c, col in self._get_normalized_column_text_colors().items()
-        }
-        self._cached_header_text_colors = {
-            c: self._resolve_color(col) for c, col in self._get_normalized_header_text_colors().items()
-        }
-
-    def _resolve_font_descriptor(
-        self,
-        raw_font: Any,
-        base_font: tuple[str, int] | ctk.CTkFont,
-    ) -> Any:
-        """Resolve font shortcuts ('bold', 'italic') into CTkFont instances or return font unmodified."""
-        if isinstance(raw_font, str):
-            shortcut = raw_font.lower().strip()
-            if shortcut in ("bold", "italic", "bold italic", "bold_italic"):
-                family = "TkDefaultFont"
-                size = 13
-                if isinstance(base_font, ctk.CTkFont):
-                    family = base_font.cget("family")
-                    size = base_font.cget("size")
-                elif isinstance(base_font, (tuple, list)) and len(base_font) >= 2:
-                    family = str(base_font[0])
-                    size = int(base_font[1])
-
-                is_bold = "bold" in shortcut
-                is_italic = "italic" in shortcut
-                return ctk.CTkFont(
-                    family=family,
-                    size=size,
-                    weight="bold" if is_bold else "normal",
-                    slant="italic" if is_italic else "roman",
-                )
-        return raw_font
-
-    def _get_base_font(self) -> tuple[str, int] | ctk.CTkFont:
-        if isinstance(self._font, dict) and "default" in self._font:
-            return self._font["default"]
-        if isinstance(self._font, (ctk.CTkFont, tuple)):
-            return self._font
-        return ctk.CTkFont()
-
-    def _get_base_header_font(self) -> tuple[str, int] | ctk.CTkFont:
-        if isinstance(self._header_font, dict) and "default" in self._header_font:
-            return self._header_font["default"]
-        if isinstance(self._header_font, (ctk.CTkFont, tuple)):
-            return self._header_font
-        return ctk.CTkFont(weight="bold")
-
-    def _update_fonts(self) -> None:
-        """Cache resolved scaled fonts and measurement objects for column and header viewports."""
-        self._cached_col_fonts.clear()
-        self._cached_col_font_objs.clear()
-        self._cached_header_fonts.clear()
-        self._cached_header_font_objs.clear()
-
-        base_font = self._get_base_font()
-        base_header_font = self._get_base_header_font()
-
-        # Cache column body fonts
-        normalized_col_fonts = self._get_normalized_column_fonts()
-        for c, raw_f in normalized_col_fonts.items():
-            resolved = self._resolve_font_descriptor(raw_f, base_font)
-            scaled_f = self._apply_font_scaling(resolved)
-            self._cached_col_fonts[c] = scaled_f
-            self._cached_col_font_objs[c] = tkfont.Font(font=scaled_f)
-
-        # Cache header fonts
-        normalized_header_fonts = self._get_normalized_header_fonts()
-        for c, raw_hf in normalized_header_fonts.items():
-            resolved = self._resolve_font_descriptor(raw_hf, base_header_font)
-            scaled_hf = self._apply_font_scaling(resolved)
-            self._cached_header_fonts[c] = scaled_hf
-            self._cached_header_font_objs[c] = tkfont.Font(font=scaled_hf)
-
-    def _resolve_col_index(self, key: int | str) -> int | None:
-        """Resolve an integer index or header title string into a logical column index."""
-        if isinstance(key, int):
-            return key
-        if str(key).lower() == "default":
-            return None
-        try:
-            return int(key)
-        except (ValueError, TypeError):
-            if self._headers is not None and key in self._headers:
-                return self._headers.index(key)
-            return None
-
-    def _normalize_scoped_dict[T](
-        self,
-        mapping: dict[int | str, T] | None,
-    ) -> tuple[T | None, dict[int, T]]:
-        """Split a scoped attribute dict into an optional default value and resolved {col_idx: value} pairs."""
-        if not isinstance(mapping, dict):
-            return None, {}
-
-        default_val: T | None = None
-        resolved: dict[int, T] = {}
-
-        for raw_k, v in mapping.items():
-            if str(raw_k).lower() == "default":
-                default_val = v
-                continue
-
-            idx = self._resolve_col_index(raw_k)
-            if idx is not None:
-                resolved[idx] = v
-
-        return default_val, resolved
-
-    def _get_normalized_column_alignments(self) -> dict[int, str]:
-        total_cols = self._get_total_cols()
-        attr = self._justify
-        if isinstance(attr, str):
-            align = attr.lower()
-            if align in ("left", "center", "right"):
-                return {c: align for c in range(total_cols)}
-        if isinstance(attr, dict):
-            default_val, resolved = self._normalize_scoped_dict(attr)
-            res: dict[int, str] = {}
-            if default_val is not None and str(default_val).lower() in ("left", "center", "right"):
-                res = {c: str(default_val).lower() for c in range(total_cols)}
-            for c, v in resolved.items():
-                if isinstance(v, str) and v.lower() in ("left", "center", "right"):
-                    res[c] = v.lower()
-            return res
-        return {}
-
-    def _get_normalized_header_alignments(self) -> dict[int, str]:
-        total_cols = self._get_total_cols()
-        if isinstance(self._header_alignment, str):
-            align = self._header_alignment.lower()
-            if align in ("left", "center", "right"):
-                return {c: align for c in range(total_cols)}
-        if isinstance(self._header_alignment, dict):
-            default_val, resolved = self._normalize_scoped_dict(self._header_alignment)
-            res: dict[int, str] = {}
-            if default_val is not None and str(default_val).lower() in ("left", "center", "right"):
-                res = {c: str(default_val).lower() for c in range(total_cols)}
-            for c, v in resolved.items():
-                if isinstance(v, str) and v.lower() in ("left", "center", "right"):
-                    res[c] = v.lower()
-            return res
-        return {}
-
-    def _get_normalized_column_text_colors(self) -> dict[int, Any]:
-        if isinstance(self._text_color, dict):
-            _, resolved = self._normalize_scoped_dict(self._text_color)
-            return resolved
-        return {}
-
-    def _get_normalized_header_text_colors(self) -> dict[int, Any]:
-        if isinstance(self._header_text_color, dict):
-            _, resolved = self._normalize_scoped_dict(self._header_text_color)
-            return resolved
-        return {}
-
-    def _get_normalized_column_fonts(self) -> dict[int, Any]:
-        if isinstance(self._font, dict):
-            _, resolved = self._normalize_scoped_dict(self._font)
-            return resolved
-        return {}
-
-    def _get_normalized_header_fonts(self) -> dict[int, Any]:
-        if isinstance(self._header_font, dict):
-            _, resolved = self._normalize_scoped_dict(self._header_font)
-            return resolved
-        return {}
 
     def _normalize_sort_key_for_model(self, sort_key: Any) -> Any:
         """Translate header title keys in sort_key dictionary to logical column indexes."""
         if isinstance(sort_key, dict):
-            default_val, resolved = self._normalize_scoped_dict(sort_key)
+            default_val, resolved = self._style.normalize_scoped_dict(sort_key)
             result: dict[int | str, Any] = dict(resolved)
             if default_val is not None:
                 result["default"] = default_val
@@ -528,20 +343,29 @@ class CTkTable(ctk.CTkFrame):
         self._layout_mgr.reapply_show_columns_rules()
         self._set_editable_rules(self._raw_editable)
         self._header_controller.reapply_sortable_rules()
-        self._update_colors()
-        self._update_fonts()
+        self._style.update_colors()
+        self._style.update_fonts()
         self._data_model.set_sort_key_rules(self._normalize_sort_key_for_model(self._raw_sort_key))
+
+    def _update_colors(self) -> None:
+        """Refresh the ready-to-draw colors and repaint the canvas backgrounds to match the frame."""
+        self._style.update_colors()
+        canvas_bg = self._style.get_canvas_background()
+        for surface in (self._table_canvas, self._header_canvas, self._header_corner, self._bottom_corner):
+            surface.configure(bg=canvas_bg)
 
     @override
     def _set_appearance_mode(self, mode_string: str) -> None:
+        """Update colors and repaint the table when the appearance mode changes."""
         super()._set_appearance_mode(mode_string)
         self._update_colors()
         self._redraw()
 
     @override
     def _set_scaling(self, *args: Any, **kwargs: Any) -> None:
+        """Update font scaling, layout positions, and repaint when the display scale changes."""
         super()._set_scaling(*args, **kwargs)
-        self._update_fonts()
+        self._style.update_fonts()
         self._re_grid_components()
         self._redraw()
 
@@ -588,11 +412,13 @@ class CTkTable(ctk.CTkFrame):
             self._headers = new_headers
 
     def _get_border_spacing(self) -> int:
+        """Calculate the total scaled outer border gap in pixels."""
         border = int(self._border_width) if self._border_width else 0
         raw_spacing = self._border_spacing + border
         return scale(self, raw_spacing)
 
     def _re_grid_components(self) -> None:
+        """Place the header canvas, body canvas, scrollbars, and filler corners into the grid."""
         spacing = self._get_border_spacing()
 
         if self._show_headers:
@@ -610,158 +436,33 @@ class CTkTable(ctk.CTkFrame):
         self._bottom_corner.grid(row=2, column=1, sticky="nsew", padx=(0, spacing), pady=(0, spacing))
 
     def _get_scaled_row_height(self) -> int:
+        """Calculate the scaled height of a table row in pixels."""
         return scale(self, self._row_height)
 
     def _get_scaled_header_height(self) -> int:
+        """Calculate the scaled height of the header row in pixels."""
         return scale(self, self._header_height)
 
-    def _get_page_row_count(self) -> int:
-        """Return how many whole rows fit in the visible body area, never less than one."""
-        return max(1, self._table_canvas.winfo_height() // self._get_scaled_row_height())
-
     def _get_total_cols(self) -> int:
+        """Return the total number of columns defined by headers or dataset values."""
         if self._headers is not None:
             return len(self._headers)
         if hasattr(self, "_data_model") and self._data_model.row_count > 0 and self._data_model.values[0]:
             return len(self._data_model.values[0])
         return 0
 
-    def _create_text_measure_lookup(self) -> TextMeasureLookup:
-        """Build a lookup that returns the header and body text measuring functions for any column."""
-        header_fallback = tkfont.Font(font=self._apply_font_scaling(self._get_base_header_font()))
-        body_fallback = tkfont.Font(font=self._apply_font_scaling(self._get_base_font()))
-
-        def lookup(col: int) -> tuple[Callable[[str], int], Callable[[str], int]]:
-            """Return (header_measure, body_measure) for a column, using its own fonts when it has them."""
-            header_font = self._cached_header_font_objs.get(col, header_fallback)
-            body_font = self._cached_col_font_objs.get(col, body_fallback)
-            return header_font.measure, body_font.measure
-
-        return lookup
-
     # -------------------------------------------------------------------------
     # Scrolling & Viewport Positioning
     # -------------------------------------------------------------------------
 
-    def _get_max_scroll_y(self) -> float:
-        """Calculate the furthest distance in pixels the table can scroll down."""
-        total_height = self._data_model.row_count * self._get_scaled_row_height()
-        canvas_height = self._table_canvas.winfo_height()
-        return max(0.0, float(total_height - canvas_height))
-
-    def _get_max_scroll_x(self, total_content_width: int) -> float:
-        """Calculate the furthest distance in pixels the table can scroll to the right."""
-        canvas_width = self._table_canvas.winfo_width()
-        return max(0.0, float(total_content_width - canvas_width))
-
-    def _scroll_y_by(self, delta_pixels: float) -> None:
-        """Shift the vertical view up or down by a given number of pixels."""
-        self._commit_edit()
-        max_scroll_y = self._get_max_scroll_y()
-        self._scroll_y = max(0.0, min(max_scroll_y, self._scroll_y + delta_pixels))
-        self._redraw()
-
-    def _scroll_x_by(self, delta_pixels: float) -> None:
-        """Shift the horizontal view left or right by a given number of pixels."""
-        self._commit_edit()
-        canvas_width = self._table_canvas.winfo_width()
-        _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
-        max_scroll_x = self._get_max_scroll_x(col_offsets[-1])
-        self._scroll_x = max(0.0, min(max_scroll_x, self._scroll_x + delta_pixels))
-        self._redraw()
-
-    def _on_mousewheel_v(self, event: Any) -> None:
-        """Scroll the table up or down when the user turns the mouse wheel."""
-        if self._data_model.row_count == 0:
-            return
-        scaled_row = self._get_scaled_row_height()
-        delta = -int((event.delta / MOUSEWHEEL_BASE_DELTA) * scaled_row * MOUSEWHEEL_STEP_ROWS)
-        self._scroll_y_by(delta)
-
-    def _on_mousewheel_h(self, event: Any) -> None:
-        """Scroll the table left or right when the user turns the mouse wheel with Shift held."""
-        delta = -int((event.delta / MOUSEWHEEL_BASE_DELTA) * scale(self, HORIZONTAL_SCROLL_STEP_PX))
-        self._scroll_x_by(delta)
-
-    def _on_v_scrollbar_command(self, action: str, *args: Any) -> None:
-        """Handle clicks and drag actions from the vertical scrollbar."""
-        if self._data_model.row_count == 0:
-            return
-        self._commit_edit()
-        scaled_row = self._get_scaled_row_height()
-        total_height = self._data_model.row_count * scaled_row
-        canvas_height = self._table_canvas.winfo_height()
-        max_scroll_y = self._get_max_scroll_y()
-
-        if action == "moveto" and args:
-            fraction = float(args[0])
-            self._scroll_y = max(0.0, min(max_scroll_y, fraction * total_height))
-            self._redraw()
-        elif action == "scroll" and len(args) >= 2:
-            step_count = int(args[0])
-            unit = args[1]
-            delta = step_count * (scaled_row * MOUSEWHEEL_STEP_ROWS if unit == "units" else canvas_height)
-            self._scroll_y_by(delta)
-
-    def _on_h_scrollbar_command(self, action: str, *args: Any) -> None:
-        """Handle clicks and drag actions from the horizontal scrollbar."""
-        self._commit_edit()
-        canvas_width = self._table_canvas.winfo_width()
-        _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
-        total_width = col_offsets[-1]
-        max_scroll_x = self._get_max_scroll_x(total_width)
-
-        if action == "moveto" and args:
-            fraction = float(args[0])
-            self._scroll_x = max(0.0, min(max_scroll_x, fraction * total_width))
-            self._redraw()
-        elif action == "scroll" and len(args) >= 2:
-            step_count = int(args[0])
-            unit = args[1]
-            delta = step_count * (scale(self, HORIZONTAL_SCROLL_STEP_PX) if unit == "units" else canvas_width)
-            self._scroll_x_by(delta)
-
-    def _on_canvas_configure(self, _event: Any) -> None:
-        """Keep the view within safe bounds and resize the header whenever the window size changes."""
-        canvas_width = self._table_canvas.winfo_width()
-        _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
-        self._scroll_y = min(self._scroll_y, self._get_max_scroll_y())
-        self._scroll_x = min(self._scroll_x, self._get_max_scroll_x(col_offsets[-1]))
+    def _on_viewport_resized(self) -> None:
+        """Resize the header to match its configured height and repaint after the body canvas changes size."""
         self._header_canvas.configure(height=self._get_scaled_header_height())
         self._redraw()
 
     def scroll_to(self, row: int | None = None, col: int | None = None) -> None:
         """Scroll the view automatically so a specific row or column is visible on screen."""
-        canvas_width = self._table_canvas.winfo_width()
-        canvas_height = self._table_canvas.winfo_height()
-        if canvas_width <= 1 or canvas_height <= 1:
-            return
-
-        if row is not None and self._data_model.row_count > 0:
-            target_r = max(0, min(self._data_model.row_count - 1, row))
-            scaled_row = self._get_scaled_row_height()
-            target_y_top = target_r * scaled_row
-            target_y_bottom = target_y_top + scaled_row
-
-            if target_y_top < self._scroll_y:
-                self._scroll_y = float(target_y_top)
-            elif target_y_bottom > self._scroll_y + canvas_height:
-                self._scroll_y = float(target_y_bottom - canvas_height)
-
-        if col is not None:
-            visible_cols = self._layout_mgr.get_visible_columns()
-            if col in visible_cols:
-                _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
-                target_v = visible_cols.index(col)
-                target_x_left = col_offsets[target_v]
-                target_x_right = col_offsets[target_v + 1]
-
-                if target_x_left < self._scroll_x:
-                    self._scroll_x = float(target_x_left)
-                elif target_x_right > self._scroll_x + canvas_width:
-                    self._scroll_x = float(target_x_right - canvas_width)
-
-        self._redraw()
+        self._scroll_controller.scroll_to(row, col)
 
     # -------------------------------------------------------------------------
     # In-Place Editing Lifecycle
@@ -771,7 +472,7 @@ class CTkTable(ctk.CTkFrame):
         """Update editable state, preserving baseline when 'default' is omitted in incremental dict reconfigures."""
         self._raw_editable = editable
         if isinstance(editable, dict):
-            default_val, resolved = self._normalize_scoped_dict(editable)
+            default_val, resolved = self._style.normalize_scoped_dict(editable)
             if default_val is not None:
                 self._editable_default = bool(default_val)
             for k, v in resolved.items():
@@ -810,23 +511,18 @@ class CTkTable(ctk.CTkFrame):
         v_idx = visible_cols.index(col)
         scaled_row = self._get_scaled_row_height()
 
-        x_left = col_offsets[v_idx] - self._scroll_x
+        x_left = col_offsets[v_idx] - self._scroll_controller.scroll_x
         col_w = col_widths[v_idx]
-        y_top = visual_row * scaled_row - self._scroll_y
+        y_top = visual_row * scaled_row - self._scroll_controller.scroll_y
 
         try:
             current_val = str(self._data_model.get_cell(visual_row, col))
         except IndexError:
             current_val = ""
 
-        border_color_hex = self._cached_colors.get("selected_bg", self._resolve_color(self._selected_color))
-
-        base_font = self._get_base_font()
-        cell_font = self._resolve_font_descriptor(
-            self._get_normalized_column_fonts().get(col, base_font),
-            base_font,
-        )
-        cell_align = self._get_normalized_column_alignments().get(col, "left")
+        border_color_hex = self._style.colors["selected_bg"]
+        cell_font = self._style.get_column_font(col)
+        cell_align = self._style.get_column_alignments().get(col, "left")
 
         self._editor.start_editing(
             display_row=visual_row,
@@ -861,7 +557,7 @@ class CTkTable(ctk.CTkFrame):
         if new_val != str(old_val):
             old_val, storage_row = self._data_model.update_cell(visual_r, c, new_val)
 
-            # Option 1: Bake current visual order if editing the active sort column
+            # Bake current visual order if editing the active sort column
             if self._data_model.sort_column == c:
                 self._data_model.commit_sort()
                 storage_row = visual_r
@@ -895,8 +591,8 @@ class CTkTable(ctk.CTkFrame):
         _, col_offsets = self._layout_mgr.calculate_geometry(canvas_width)
         scaled_row = self._get_scaled_row_height()
 
-        row = int((pixel_y + self._scroll_y) // scaled_row)
-        v_idx = bisect_right(col_offsets, pixel_x + self._scroll_x) - 1
+        row = int((pixel_y + self._scroll_controller.scroll_y) // scaled_row)
+        v_idx = bisect_right(col_offsets, pixel_x + self._scroll_controller.scroll_x) - 1
 
         if 0 <= row < self._data_model.row_count and 0 <= v_idx < len(visible_cols):
             return (row, visible_cols[v_idx])
@@ -973,14 +669,14 @@ class CTkTable(ctk.CTkFrame):
             self._header_canvas.delete("all")
             return
 
-        start_col = max(0, bisect_right(col_offsets, self._scroll_x) - 1 - self._overscan_cols)
+        start_col = max(0, bisect_right(col_offsets, self._scroll_controller.scroll_x) - 1 - self._overscan_cols)
         end_col = min(
             total_cols,
-            bisect_left(col_offsets, self._scroll_x + canvas_w) + 1 + self._overscan_cols,
+            bisect_left(col_offsets, self._scroll_controller.scroll_x + canvas_w) + 1 + self._overscan_cols,
         )
 
         scaled_padding = scale(self, CELL_HORIZONTAL_PADDING)
-        divider_hex = self._cached_colors.get("divider", self._resolve_color(self._divider_color))
+        divider_hex = self._style.colors["divider"]
         header_h = self._get_scaled_header_height()
         radius_val = int(self._corner_radius) if self._corner_radius else 0
         scaled_radius = scale(self, radius_val)
@@ -992,23 +688,23 @@ class CTkTable(ctk.CTkFrame):
             col_offsets=col_offsets,
             start_col=start_col,
             end_col=end_col,
-            scroll_x=self._scroll_x,
+            scroll_x=self._scroll_controller.scroll_x,
             header_height=header_h,
             canvas_width=canvas_w,
             corner_radius=scaled_radius,
-            bg_hex=self._cached_colors.get("header_fg", self._resolve_color(self._header_fg_color)),
-            text_color_hex=self._cached_colors.get("header_text", ""),
+            bg_hex=self._style.colors["header_fg"],
+            text_color_hex=self._style.colors["header_text"],
             divider_color_hex=divider_hex,
-            header_font=self._apply_font_scaling(self._get_base_header_font()),
+            header_font=self._style.get_scaled_header_font(),
             sort_col=self._data_model.sort_column,
             sort_ascending=self._data_model.sort_ascending,
             scaled_padding=scaled_padding,
-            header_alignments=self._get_normalized_header_alignments(),
-            header_text_colors=self._cached_header_text_colors,
-            header_fonts=self._cached_header_fonts,
-            header_font_objs=self._cached_header_font_objs,
+            header_alignments=self._style.get_header_alignments(),
+            header_text_colors=self._style.header_text_colors,
+            header_fonts=self._style.header_fonts,
+            header_font_objs=self._style.header_font_objs,
             hovered_col=self._header_controller.hovered_col,
-            header_hover_color_hex=self._cached_colors.get("header_hover"),
+            header_hover_color_hex=self._style.colors.get("header_hover"),
             visible_cols=visible_cols,
         )
 
@@ -1026,29 +722,29 @@ class CTkTable(ctk.CTkFrame):
         total_content_width = col_offsets[-1]
 
         if total_cols > 0:
-            start_col = max(0, bisect_right(col_offsets, self._scroll_x) - 1 - self._overscan_cols)
+            start_col = max(0, bisect_right(col_offsets, self._scroll_controller.scroll_x) - 1 - self._overscan_cols)
             end_col = min(
                 total_cols,
-                bisect_left(col_offsets, self._scroll_x + canvas_w) + 1 + self._overscan_cols,
+                bisect_left(col_offsets, self._scroll_controller.scroll_x + canvas_w) + 1 + self._overscan_cols,
             )
         else:
             start_col, end_col = 0, 0
 
         scaled_padding = scale(self, CELL_HORIZONTAL_PADDING)
-        divider_hex = self._cached_colors.get("divider", self._resolve_color(self._divider_color))
+        divider_hex = self._style.colors["divider"]
 
-        # 1. Pinned Header Rendering
+        # Pinned header rendering
         if self._show_headers:
             self._redraw_header()
 
-        # 2. Body Viewport Rendering
+        # Body viewport rendering
         scaled_row = self._get_scaled_row_height()
         total_content_height = total_rows * scaled_row
 
-        start_row = max(0, int(self._scroll_y // scaled_row) - self._overscan_rows)
+        start_row = max(0, int(self._scroll_controller.scroll_y // scaled_row) - self._overscan_rows)
         end_row = min(
             total_rows,
-            int((self._scroll_y + canvas_h) // scaled_row) + self._overscan_rows + 1,
+            int((self._scroll_controller.scroll_y + canvas_h) // scaled_row) + self._overscan_rows + 1,
         )
 
         self._renderer.render_body(
@@ -1061,31 +757,31 @@ class CTkTable(ctk.CTkFrame):
             end_col=end_col,
             start_row=start_row,
             end_row=end_row,
-            scroll_x=self._scroll_x,
-            scroll_y=self._scroll_y,
+            scroll_x=self._scroll_controller.scroll_x,
+            scroll_y=self._scroll_controller.scroll_y,
             scaled_row_height=scaled_row,
             canvas_width=canvas_w,
-            text_color_hex=self._cached_colors.get("text", ""),
-            selected_bg_hex=self._cached_colors.get("selected_bg", self._resolve_color(self._selected_color)),
-            selected_text_hex=self._cached_colors.get("selected_text", self._resolve_color(self._selected_text_color)),
-            row_even_bg=self._cached_colors.get("row_even", ""),
-            row_odd_bg=self._cached_colors.get("row_odd", ""),
+            text_color_hex=self._style.colors["text"],
+            selected_bg_hex=self._style.colors["selected_bg"],
+            selected_text_hex=self._style.colors["selected_text"],
+            row_even_bg=self._style.colors["row_even"],
+            row_odd_bg=self._style.colors["row_odd"],
             divider_color_hex=divider_hex,
-            body_font=self._apply_font_scaling(self._get_base_font()),
+            body_font=self._style.get_scaled_body_font(),
             scaled_padding=scaled_padding,
-            column_alignments=self._get_normalized_column_alignments(),
-            col_text_colors=self._cached_col_text_colors,
-            col_fonts=self._cached_col_fonts,
-            col_font_objs=self._cached_col_font_objs,
+            column_alignments=self._style.get_column_alignments(),
+            col_text_colors=self._style.column_text_colors,
+            col_fonts=self._style.column_fonts,
+            col_font_objs=self._style.column_font_objs,
             visible_cols=visible_cols,
         )
 
-        # 3. Synchronize Scrollbars
+        # Synchronize scrollbars
         self._renderer.sync_scrollbars(
             v_scrollbar=self._v_scrollbar,
             h_scrollbar=self._h_scrollbar,
-            scroll_x=self._scroll_x,
-            scroll_y=self._scroll_y,
+            scroll_x=self._scroll_controller.scroll_x,
+            scroll_y=self._scroll_controller.scroll_y,
             total_content_width=total_content_width,
             total_content_height=total_content_height,
             canvas_width=canvas_w,
@@ -1186,10 +882,14 @@ class CTkTable(ctk.CTkFrame):
         return self._data_model.get_row(row_index)
 
     @overload
-    def get_raw_row_index(self, display_row: int) -> int: ...
+    def get_raw_row_index(self, display_row: int) -> int:
+        """Translate a single visual display row index to its raw storage index."""
+        ...
 
     @overload
-    def get_raw_row_index(self, display_row: Sequence[int]) -> list[int]: ...
+    def get_raw_row_index(self, display_row: Sequence[int]) -> list[int]:
+        """Translate multiple visual display row indexes to raw storage indexes."""
+        ...
 
     def get_raw_row_index(self, display_row: int | Sequence[int]) -> int | list[int]:
         """Translate one or multiple visual display row indexes to raw storage indexes."""
@@ -1198,10 +898,14 @@ class CTkTable(ctk.CTkFrame):
         return self._data_model.get_raw_row_index(display_row)
 
     @overload
-    def get_display_row_index(self, raw_row: int) -> int: ...
+    def get_display_row_index(self, raw_row: int) -> int:
+        """Translate a single raw row index to its current visual display index."""
+        ...
 
     @overload
-    def get_display_row_index(self, raw_row: Sequence[int]) -> list[int]: ...
+    def get_display_row_index(self, raw_row: Sequence[int]) -> list[int]:
+        """Translate multiple raw row indexes to current visual display indexes."""
+        ...
 
     def get_display_row_index(self, raw_row: int | Sequence[int]) -> int | list[int]:
         """Translate one or multiple raw row indexes to current visual display indexes."""
@@ -1284,9 +988,7 @@ class CTkTable(ctk.CTkFrame):
 
         self._selection_manager.adjust_indexes_after_delete(deleted_targets, self._data_model.row_count)
 
-        max_y = self._get_max_scroll_y()
-        if self._scroll_y > max_y:
-            self._scroll_y = max(0.0, max_y)
+        self._scroll_controller.clamp_vertical()
 
         self._redraw()
         self._notify_command()
@@ -1333,203 +1035,31 @@ class CTkTable(ctk.CTkFrame):
     @override
     def cget(self, attribute_name: str) -> Any:
         """Retrieve table widget configuration options."""
-        match attribute_name:
-            case "values":
-                return self._data_model.values
-            case "headers":
-                return self._headers
-            case "show_headers":
-                return self._show_headers
-            case "show_columns":
-                return self._layout_mgr.show_columns_setting
-            case "column_widths":
-                return self._layout_mgr.column_widths
-            case "sort_key":
-                return self._data_model.sort_key
-            case "header_sortable":
-                return self._header_controller.sortable_setting
-            case "editable":
-                if not self._editable_cols:
-                    return self._editable_default
-                res: dict[int | str, bool] = dict(self._editable_cols)
-                res["default"] = self._editable_default
-                return res
-            case "selection_target":
-                return self._selection_manager.target
-            case "selection_mode":
-                return self._selection_manager.mode
-            case "copyable":
-                return self._copyable
-            case "row_height":
-                return self._row_height
-            case "header_height":
-                return self._header_height
-            case "row_color":
-                return self._row_color
-            case "alternate_row_color":
-                return self._alternate_row_color
-            case "selected_color":
-                return self._selected_color
-            case "selected_text_color":
-                return self._selected_text_color
-            case "border_spacing":
-                return self._border_spacing
-            case "command":
-                return self.command
-            case "justify":
-                return self._justify
-            case "header_alignment":
-                return self._header_alignment
-            case "header_hover_color":
-                return self._header_hover_color
-            case "text_color":
-                return self._text_color
-            case "font":
-                return self._font
-            case "header_text_color":
-                return self._header_text_color
-            case "header_font":
-                return self._header_font
-            case _:
-                return super().cget(attribute_name)
+        if hasattr(self, "_option_getters"):
+            getter = self._option_getters.get(attribute_name)
+            if getter is not None:
+                return getter()
+        if hasattr(self, "_style") and attribute_name in STYLE_OPTIONS:
+            return self._style.get_option(attribute_name)
+        return super().cget(attribute_name)
 
     @override
     def configure(self, require_redraw: bool = False, **kwargs: Any) -> None:
         """Configure widget options dynamically and refresh the viewport in a single batched pass."""
         needs_redraw = require_redraw
         re_grid = False
-        fonts_changed = False
-        colors_changed = False
 
-        if "values" in kwargs:
-            new_values = kwargs.pop("values")
-            self._commit_edit()
-            self._data_model.reset_values(new_values)
-            self._selection_manager.clear()
-            self._scroll_y = 0.0
+        for name, setter in self._option_setters.items():
+            if name not in kwargs:
+                continue
+            setter(kwargs.pop(name))
+            needs_redraw = needs_redraw or name in _REDRAW_OPTIONS
+            re_grid = re_grid or name in _REGRID_OPTIONS
+
+        style_options = {name: kwargs.pop(name) for name in STYLE_OPTIONS if name in kwargs}
+        if style_options:
+            self._style.configure_options(style_options)
             needs_redraw = True
-
-        if "headers" in kwargs:
-            new_headers = kwargs.pop("headers")
-            self._apply_headers(new_headers)
-            if "show_headers" not in kwargs:
-                self._show_headers = self._headers is not None
-            self._re_normalize_scoped_attributes()
-            re_grid = True
-            needs_redraw = True
-
-        if "show_headers" in kwargs:
-            self._show_headers = bool(kwargs.pop("show_headers"))
-            re_grid = True
-            needs_redraw = True
-
-        if "show_columns" in kwargs:
-            self._layout_mgr.set_show_columns_rules(kwargs.pop("show_columns"))
-            self._scroll_x = 0.0
-            needs_redraw = True
-
-        if "column_widths" in kwargs:
-            self._layout_mgr.column_widths = kwargs.pop("column_widths")
-            self._scroll_x = 0.0
-            needs_redraw = True
-
-        if "justify" in kwargs:
-            self._justify = kwargs.pop("justify")
-            needs_redraw = True
-
-        if "header_alignment" in kwargs:
-            self._header_alignment = kwargs.pop("header_alignment")
-            needs_redraw = True
-
-        if "header_hover_color" in kwargs:
-            self._header_hover_color = kwargs.pop("header_hover_color")
-            colors_changed = True
-            needs_redraw = True
-
-        if "editable" in kwargs:
-            self._set_editable_rules(kwargs.pop("editable"))
-            if not self._has_editable_cells():
-                self._cancel_edit()
-
-        if "header_sortable" in kwargs:
-            self._header_controller.set_sortable_rules(kwargs.pop("header_sortable"))
-
-        if "selection_target" in kwargs:
-            self._selection_manager.set_target(kwargs.pop("selection_target"))
-            needs_redraw = True
-
-        if "selection_mode" in kwargs:
-            self._selection_manager.set_mode(kwargs.pop("selection_mode"))
-            needs_redraw = True
-
-        if "copyable" in kwargs:
-            self._copyable = bool(kwargs.pop("copyable"))
-
-        if "row_height" in kwargs:
-            self._row_height = max(MIN_ROW_HEIGHT, int(kwargs.pop("row_height")))
-            needs_redraw = True
-
-        if "header_height" in kwargs:
-            self._header_height = max(MIN_HEADER_HEIGHT, int(kwargs.pop("header_height")))
-            needs_redraw = True
-
-        if "border_spacing" in kwargs:
-            self._border_spacing = max(0, int(kwargs.pop("border_spacing")))
-            re_grid = True
-            needs_redraw = True
-
-        if "sort_key" in kwargs:
-            sk = kwargs.pop("sort_key")
-            self._raw_sort_key = sk
-            self._data_model.set_sort_key_rules(self._normalize_sort_key_for_model(sk))
-            needs_redraw = True
-
-        if "on_cell_edit" in kwargs:
-            self.on_cell_edit = kwargs.pop("on_cell_edit")
-
-        if "command" in kwargs:
-            self.command = kwargs.pop("command")
-
-        for color_prop in (
-            "selected_color",
-            "selected_text_color",
-            "row_color",
-            "alternate_row_color",
-            "text_color",
-            "header_text_color",
-        ):
-            if color_prop in kwargs:
-                setattr(self, f"_{color_prop}", kwargs.pop(color_prop))
-                colors_changed = True
-                needs_redraw = True
-
-        if "header_fg_color" in kwargs:
-            h_fg = kwargs.pop("header_fg_color")
-            self._header_fg_color = (
-                ctk.ThemeManager.theme["CTkFrame"].get("top_fg_color", ctk.ThemeManager.theme["CTkFrame"]["fg_color"])
-                if h_fg is None
-                else h_fg
-            )
-            colors_changed = True
-            needs_redraw = True
-
-        if "font" in kwargs:
-            f_val = kwargs.pop("font")
-            self._font = ctk.CTkFont() if f_val is None else f_val
-            fonts_changed = True
-            needs_redraw = True
-
-        if "header_font" in kwargs:
-            hf_val = kwargs.pop("header_font")
-            self._header_font = ctk.CTkFont(weight="bold") if hf_val is None else hf_val
-            fonts_changed = True
-            needs_redraw = True
-
-        if fonts_changed:
-            self._update_fonts()
-
-        if colors_changed:
-            self._update_colors()
 
         if kwargs:
             if "corner_radius" in kwargs or "border_width" in kwargs:
@@ -1543,6 +1073,133 @@ class CTkTable(ctk.CTkFrame):
 
         if needs_redraw:
             self._redraw()
+
+    # -------------------------------------------------------------------------
+    # Option Dispatch Tables
+    # -------------------------------------------------------------------------
+
+    def _create_option_getters(self) -> dict[str, Callable[[], Any]]:
+        """Map each table-specific option name to the function that reads its current value."""
+        return {
+            "values": lambda: self._data_model.values,
+            "headers": lambda: self._headers,
+            "show_headers": lambda: self._show_headers,
+            "show_columns": lambda: self._layout_mgr.show_columns_setting,
+            "column_widths": lambda: self._layout_mgr.column_widths,
+            "sort_key": lambda: self._data_model.sort_key,
+            "header_sortable": lambda: self._header_controller.sortable_setting,
+            "editable": self._get_editable_setting,
+            "selection_target": lambda: self._selection_manager.target,
+            "selection_mode": lambda: self._selection_manager.mode,
+            "copyable": lambda: self._copyable,
+            "row_height": lambda: self._row_height,
+            "header_height": lambda: self._header_height,
+            "border_spacing": lambda: self._border_spacing,
+            "command": lambda: self.command,
+        }
+
+    def _create_option_setters(self) -> dict[str, Callable[[Any], None]]:
+        """Map each table-specific option name to the function that applies a new value.
+
+        The order matters: headers must be applied before the settings that
+        refer to columns by header title.
+        """
+        return {
+            "values": self._configure_values,
+            "headers": self._configure_headers,
+            "show_headers": self._configure_show_headers,
+            "show_columns": self._configure_show_columns,
+            "column_widths": self._configure_column_widths,
+            "editable": self._configure_editable,
+            "header_sortable": self._configure_header_sortable,
+            "selection_target": self._selection_manager.set_target,
+            "selection_mode": self._selection_manager.set_mode,
+            "copyable": self._configure_copyable,
+            "row_height": self._configure_row_height,
+            "header_height": self._configure_header_height,
+            "border_spacing": self._configure_border_spacing,
+            "sort_key": self._configure_sort_key,
+            "on_cell_edit": self._configure_on_cell_edit,
+            "command": self._configure_command,
+        }
+
+    def _get_editable_setting(self) -> bool | dict[int | str, bool]:
+        """Return the editable rules as one bool, or as a per-column dict with a 'default' entry."""
+        if not self._editable_cols:
+            return self._editable_default
+        rules: dict[int | str, bool] = dict(self._editable_cols)
+        rules["default"] = self._editable_default
+        return rules
+
+    def _configure_values(self, new_values: list[list[Any]] | None) -> None:
+        """Replace the whole dataset, then reset the selection and scroll back to the top."""
+        self._commit_edit()
+        self._data_model.reset_values(new_values)
+        self._selection_manager.clear()
+        self._scroll_controller.reset_vertical()
+
+    def _configure_headers(self, new_headers: list[str] | dict[int | str, str] | None) -> None:
+        """Apply new header titles and rebuild every setting that refers to columns by title.
+
+        Headers are shown whenever titles exist. An explicit show_headers in the same
+        configure call is applied afterwards and wins.
+        """
+        self._apply_headers(new_headers)
+        self._show_headers = self._headers is not None
+        self._re_normalize_scoped_attributes()
+
+    def _configure_show_headers(self, show: bool) -> None:
+        """Show or hide the header bar."""
+        self._show_headers = bool(show)
+
+    def _configure_show_columns(self, show_columns: bool | dict[int | str, bool]) -> None:
+        """Change which columns are visible and scroll back to the left edge."""
+        self._layout_mgr.set_show_columns_rules(show_columns)
+        self._scroll_controller.reset_horizontal()
+
+    def _configure_column_widths(self, column_widths: int | str | dict[int | str, int | str] | None) -> None:
+        """Change column widths and scroll back to the left edge."""
+        self._layout_mgr.column_widths = column_widths
+        self._scroll_controller.reset_horizontal()
+
+    def _configure_editable(self, editable: bool | dict[int | str, bool]) -> None:
+        """Change which columns can be edited and close any open editor if none remain."""
+        self._set_editable_rules(editable)
+        if not self._has_editable_cells():
+            self._cancel_edit()
+
+    def _configure_header_sortable(self, header_sortable: bool | dict[int | str, bool]) -> None:
+        """Change which column headers sort the table when clicked."""
+        self._header_controller.set_sortable_rules(header_sortable)
+
+    def _configure_copyable(self, copyable: bool) -> None:
+        """Turn the Ctrl+C copy shortcut on or off."""
+        self._copyable = bool(copyable)
+
+    def _configure_row_height(self, row_height: int) -> None:
+        """Set the body row height, never below the minimum."""
+        self._row_height = max(MIN_ROW_HEIGHT, int(row_height))
+
+    def _configure_header_height(self, header_height: int) -> None:
+        """Set the header bar height, never below the minimum."""
+        self._header_height = max(MIN_HEADER_HEIGHT, int(header_height))
+
+    def _configure_border_spacing(self, border_spacing: int) -> None:
+        """Set the gap between the frame border and the table contents, never below zero."""
+        self._border_spacing = max(0, int(border_spacing))
+
+    def _configure_sort_key(self, sort_key: Any) -> None:
+        """Change how cell values are compared when sorting."""
+        self._raw_sort_key = sort_key
+        self._data_model.set_sort_key_rules(self._normalize_sort_key_for_model(sort_key))
+
+    def _configure_on_cell_edit(self, callback: Callable[[int, int, Any, Any], None] | None) -> None:
+        """Set the function called after a cell value changes."""
+        self.on_cell_edit = callback
+
+    def _configure_command(self, callback: Callable[[Any], None] | None) -> None:
+        """Set the function called when the selection changes."""
+        self.command = callback
 
     @override
     def bind(

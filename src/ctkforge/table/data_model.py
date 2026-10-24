@@ -1,8 +1,7 @@
 """Stores the tabular dataset, maps visible row indexes to storage rows, and handles column sorting.
 
-This module provides the TableDataModel class, which holds table records in memory.
-It separates visual display order from actual storage order, allowing fast sorting
-without rearranging or mutating the original data list.
+Holds table records in memory and separates visual display order from actual storage
+order, allowing fast sorting without rearranging or mutating the original data list.
 """
 
 from collections.abc import Callable
@@ -25,6 +24,7 @@ class TableDataModel:
         values: list[list[Any]] | None = None,
         sort_key: SortKey | dict[int | str, SortKey] | None = None,
     ) -> None:
+        """Initialize dataset storage, visual row mappings, and sort key rules."""
         self._values: list[list[Any]] = [list(row) for row in values] if values is not None else []
         self._row_indexes: list[int] = list(range(len(self._values)))
         self._sort_key_default: SortKey = "str"

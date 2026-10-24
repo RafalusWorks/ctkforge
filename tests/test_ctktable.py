@@ -223,10 +223,10 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     root.update()
     table.scroll_to(row=35)
     step()
-    assert table._scroll_y > 0.0, "Viewport should scroll down to row 35"
+    assert table._scroll_controller.scroll_y > 0.0, "Viewport should scroll down to row 35"
     table.scroll_to(row=0)
     step()
-    assert table._scroll_y == 0.0, "Viewport should scroll back to top"
+    assert table._scroll_controller.scroll_y == 0.0, "Viewport should scroll back to top"
     print("[16/25] Scrolling and Viewport Clamping: PASSED", flush=True)
 
     # 17. Index Resolution (Display <-> Raw)
@@ -283,11 +283,11 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     table.configure(sort_key={"default": "str", 0: "int", 3: "int"})
     table.clear_sort()
 
-    col_norm = table._get_normalized_column_alignments()
+    col_norm = table._style.get_column_alignments()
     assert col_norm[0] == "center"
     assert col_norm[1] == "left"
     assert col_norm[3] == "right"
-    h_norm = table._get_normalized_header_alignments()
+    h_norm = table._style.get_header_alignments()
     assert h_norm[0] == "center"
     assert h_norm[3] == "center"
     print("[20/25] Justify and Header Alignments: PASSED", flush=True)
@@ -300,10 +300,10 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     step()
     assert table.cget("text_color") == {"default": "#ffffff", 1: "#ff0000", 3: ("#112233", "#aabbcc")}
     assert table.cget("header_text_color") == {"default": "#3b8ed0", 0: "#00ff00"}
-    assert table._cached_colors["text"] == "#ffffff"
-    assert table._cached_colors["header_text"] == "#3b8ed0"
-    assert table._cached_col_text_colors[1] == "#ff0000"
-    assert table._cached_header_text_colors[0] == "#00ff00"
+    assert table._style.colors["text"] == "#ffffff"
+    assert table._style.colors["header_text"] == "#3b8ed0"
+    assert table._style.column_text_colors[1] == "#ff0000"
+    assert table._style.header_text_colors[0] == "#00ff00"
     print("[21/25] Column and Header Text Colors: PASSED", flush=True)
 
     # 22. Unified Fonts with Shortcuts and 'default' key
@@ -312,10 +312,10 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
         header_font={0: "bold"},
     )
     step()
-    assert 1 in table._cached_col_fonts
-    assert 1 in table._cached_col_font_objs
-    assert 0 in table._cached_header_fonts
-    assert 0 in table._cached_header_font_objs
+    assert 1 in table._style.column_fonts
+    assert 1 in table._style.column_font_objs
+    assert 0 in table._style.header_fonts
+    assert 0 in table._style.header_font_objs
     print("[22/25] Column and Header Fonts with Shortcuts: PASSED", flush=True)
 
     # 23. Header Hover State & Interactive Pointer Dispatching
@@ -452,8 +452,8 @@ def test_theme_color_pair_not_unpacked_as_columns() -> None:
     table.pack()
     root.update()
 
-    assert table._cached_col_text_colors == {}
-    assert table._cached_header_text_colors == {}
+    assert table._style.column_text_colors == {}
+    assert table._style.header_text_colors == {}
 
     header_fills = [
         table._header_canvas.itemcget(item, "fill")
@@ -831,7 +831,7 @@ def test_named_header_keys_scoped_attributes() -> None:
     root.update()
 
     # Verify column_widths resolved "ID" -> 0 (70) and "Salary" -> 3 (140)
-    default_w, norm_w = table._normalize_scoped_dict(table.cget("column_widths"))
+    default_w, norm_w = table._style.normalize_scoped_dict(table.cget("column_widths"))
     assert default_w == "auto"
     assert norm_w[0] == 70
     assert norm_w[3] == 140
@@ -846,13 +846,13 @@ def test_named_header_keys_scoped_attributes() -> None:
     assert table._header_controller.is_column_sortable(4) is False
 
     # Verify justify resolved "ID" -> 0, "Salary" -> 3
-    alignments = table._get_normalized_column_alignments()
+    alignments = table._style.get_column_alignments()
     assert alignments[0] == "center"
     assert alignments[3] == "right"
     assert alignments[1] == "left"
 
     # Verify text_color resolved "Salary" -> 3
-    text_colors = table._get_normalized_column_text_colors()
+    text_colors = table._style.get_column_text_colors()
     assert text_colors[3] == "#2ecc71"
 
     # Verify sort_key resolved "ID" -> 0, "Salary" -> 3
@@ -860,7 +860,7 @@ def test_named_header_keys_scoped_attributes() -> None:
     assert table._data_model._sort_key_cols[3] == "int"
 
     # Verify header_alignment resolved "ID" -> 0, "Salary" -> 3
-    h_align = table._get_normalized_header_alignments()
+    h_align = table._style.get_header_alignments()
     assert h_align[0] == "center"
     assert h_align[3] == "right"
 
@@ -919,7 +919,7 @@ def test_keyboard_navigation_and_shortcuts() -> None:
     # End jumps to the last row, and Page Up moves back by a screenful
     press("<End>")
     assert selection.focused_row == 99
-    page_rows = table._get_page_row_count()
+    page_rows = table._scroll_controller.get_page_row_count()
     press("<Prior>")
     assert selection.focused_row == 99 - page_rows
     press("<Next>")
@@ -989,6 +989,119 @@ def test_divider_drag_resizes_column_left_of_divider() -> None:
     root.destroy()
 
 
+def test_scroll_wheel_scrollbars_and_clamping() -> None:
+    """Verify mouse wheel, scrollbar commands, edge clamping, and scroll_to move the view correctly."""
+    root = ctk.CTk()
+    root.geometry("600x400+9999+9999")
+
+    table = CTkTable(
+        root,
+        headers=["A", "B", "C", "D", "E", "F"],
+        values=[[f"{r}-{c}" for c in range(6)] for r in range(200)],
+        column_widths=300,
+    )
+    table.pack(fill="both", expand=True)
+    root.update()
+
+    class WheelEvent:
+        def __init__(self, delta: int) -> None:
+            self.delta = delta
+
+    scroller = table._scroll_controller
+    assert scroller.scroll_x == 0.0
+    assert scroller.scroll_y == 0.0
+
+    # Wheel down scrolls the body, and wheel up cannot go above the first row
+    scroller._on_mousewheel_v(WheelEvent(-120))
+    assert scroller.scroll_y > 0.0
+    scroller._on_mousewheel_v(WheelEvent(120 * 50))
+    assert scroller.scroll_y == 0.0
+
+    # Shift+wheel scrolls sideways and cannot go past the left edge
+    scroller._on_mousewheel_h(WheelEvent(-120))
+    assert scroller.scroll_x > 0.0
+    scroller._on_mousewheel_h(WheelEvent(120 * 50))
+    assert scroller.scroll_x == 0.0
+
+    # Dragging the vertical scrollbar to the very end stops at the furthest scroll position
+    scroller.on_v_scrollbar_command("moveto", "1.0")
+    assert scroller.scroll_y == scroller._get_max_scroll_y() > 0.0
+    scroller.on_v_scrollbar_command("scroll", "-1", "pages")
+    assert 0.0 < scroller.scroll_y < scroller._get_max_scroll_y()
+
+    # Dragging the horizontal scrollbar to the very end stops at the furthest scroll position
+    scroller.on_h_scrollbar_command("moveto", "1.0")
+    assert scroller.scroll_x == scroller._get_max_scroll_x() > 0.0
+
+    # Deleting rows near the end pulls the view back so no blank space shows below the last row
+    table.delete_rows(list(range(100, 200)))
+    root.update()
+    assert scroller.scroll_y == scroller._get_max_scroll_y()
+
+    # scroll_to brings a far-away row into view, and replacing the data returns to the top
+    table.scroll_to(row=0)
+    assert scroller.scroll_y == 0.0
+    table.scroll_to(row=99)
+    assert scroller.scroll_y == scroller._get_max_scroll_y()
+    table.configure(values=[[f"{r}-{c}" for c in range(6)] for r in range(50)])
+    assert scroller.scroll_y == 0.0
+
+    table.destroy()
+    root.destroy()
+
+
+def test_style_reconfigure_theme_defaults_and_appearance_mode() -> None:
+    """Verify style options reconfigure live, None restores theme defaults, and colors follow appearance mode."""
+    root = ctk.CTk()
+    root.geometry("800x500+9999+9999")
+    previous_mode = ctk.get_appearance_mode()
+
+    table = CTkTable(
+        root,
+        headers=["ID", "Name", "Status"],
+        values=[[1, "Alice", "Active"], [2, "Bob", "Inactive"]],
+        text_color=("#111111", "#eeeeee"),
+    )
+    table.pack(fill="both", expand=True)
+    root.update()
+
+    try:
+        # Colors follow the appearance mode through the widget's own callback
+        ctk.set_appearance_mode("Dark")
+        table._set_appearance_mode("Dark")
+        assert table._style.colors["text"] == "#eeeeee"
+        ctk.set_appearance_mode("Light")
+        table._set_appearance_mode("Light")
+        assert table._style.colors["text"] == "#111111"
+
+        # Row colors and per-column fonts update the ready-to-draw caches immediately
+        table.configure(row_color="#101010", alternate_row_color="#202020", font={"Name": "bold"})
+        assert table._style.colors["row_even"] == "#101010"
+        assert table._style.colors["row_odd"] == "#202020"
+        assert 1 in table._style.column_fonts
+        assert table.cget("row_color") == "#101010"
+
+        # Passing None puts the theme default back instead of storing None
+        theme = ctk.ThemeManager.theme
+        table.configure(text_color=None, selected_color=None, selected_text_color=None, font=None)
+        assert table.cget("text_color") == theme["CTkLabel"]["text_color"]
+        assert table.cget("selected_color") == theme["CTkButton"]["fg_color"]
+        assert table._style.colors["text"]
+        assert table._style.colors["selected_bg"]
+        assert table._style.colors["selected_text"]
+        assert table._style.column_fonts == {}
+
+        # Alignment settings can be replaced and read back, and header_fg_color is readable too
+        table.configure(justify={"default": "left", "ID": "right"}, header_alignment="center")
+        assert table._style.get_column_alignments() == {0: "right", 1: "left", 2: "left"}
+        assert table._style.get_header_alignments() == {0: "center", 1: "center", 2: "center"}
+        assert table.cget("header_fg_color")
+    finally:
+        ctk.set_appearance_mode(previous_mode)
+        table.destroy()
+        root.destroy()
+
+
 if __name__ == "__main__":
     run_headless_tests()
     test_theme_color_pair_not_unpacked_as_columns()
@@ -1001,3 +1114,5 @@ if __name__ == "__main__":
     test_named_header_keys_scoped_attributes()
     test_keyboard_navigation_and_shortcuts()
     test_divider_drag_resizes_column_left_of_divider()
+    test_scroll_wheel_scrollbars_and_clamping()
+    test_style_reconfigure_theme_defaults_and_appearance_mode()
