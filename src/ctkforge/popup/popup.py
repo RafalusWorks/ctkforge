@@ -216,11 +216,7 @@ class CTkPopup(ctk.CTkToplevel):
                 (b for b in self._normalized_buttons if b.get("role") == "primary"),
                 None,
             )
-            self._default_value = (
-                primary_btn["value"]
-                if primary_btn
-                else self._normalized_buttons[0]["value"]
-            )
+            self._default_value = primary_btn["value"] if primary_btn else self._normalized_buttons[0]["value"]
 
         # Resolve cancel (<Escape> and 'X') button
         if cancel_button is not _SENTINEL:
@@ -228,9 +224,7 @@ class CTkPopup(ctk.CTkToplevel):
         elif "cancel_button" in preset_config:
             self._cancel_value = preset_config["cancel_button"]
         else:
-            cancel_btn = next(
-                (b for b in self._normalized_buttons if b.get("role") == "cancel"), None
-            )
+            cancel_btn = next((b for b in self._normalized_buttons if b.get("role") == "cancel"), None)
             if cancel_btn:
                 self._cancel_value = cancel_btn["value"]
             elif len(self._normalized_buttons) == 1:
@@ -240,18 +234,14 @@ class CTkPopup(ctk.CTkToplevel):
 
         # Resolve icon
         icon_source = icon if icon is not None else preset_config.get("icon")
-        self._icon_image = resolve_icon(
-            icon_source, preset_name=preset_key, display_size=ICON_DISPLAY_SIZE
-        )
+        self._icon_image = resolve_icon(icon_source, preset_name=preset_key, display_size=ICON_DISPLAY_SIZE)
 
     def _setup_window(self) -> None:
         """Configure window decorations, transiency, and key bindings."""
         self.title(self._title_text)
         self.resizable(False, False)
 
-        if self.master is not None and isinstance(
-            self.master, (ctk.CTk, ctk.CTkToplevel)
-        ):
+        if self.master is not None and isinstance(self.master, (ctk.CTk, ctk.CTkToplevel)):
             with suppress(tk.TclError):
                 self.transient(self.master)
 
@@ -270,9 +260,7 @@ class CTkPopup(ctk.CTkToplevel):
             border_color=self._border_color,
             fg_color=self._fg_color,
         )
-        self._main_frame.pack(
-            fill="both", expand=True, padx=POPUP_PADDING, pady=POPUP_PADDING
-        )
+        self._main_frame.pack(fill="both", expand=True, padx=POPUP_PADDING, pady=POPUP_PADDING)
 
         self._content_frame = ctk.CTkFrame(self._main_frame, fg_color="transparent")
         self._content_frame.pack(
@@ -292,9 +280,7 @@ class CTkPopup(ctk.CTkToplevel):
             pady=(0, BUTTON_CONTAINER_PADDING_BOTTOM),
         )
 
-        self._button_container = ctk.CTkFrame(
-            self._button_frame, fg_color="transparent"
-        )
+        self._button_container = ctk.CTkFrame(self._button_frame, fg_color="transparent")
         self._button_container.pack(anchor="e")
 
         self._render_buttons()
@@ -337,9 +323,7 @@ class CTkPopup(ctk.CTkToplevel):
             self._icon_label.destroy()
             self._icon_label = None
 
-    def _measure_text_height(
-        self, text: str, wraplength: int, font: ctk.CTkFont | tuple[Any, ...] | None
-    ) -> int:
+    def _measure_text_height(self, text: str, wraplength: int, font: ctk.CTkFont | tuple[Any, ...] | None) -> int:
         """Measure natural rendered height of wrapped text in logical pixels."""
         measurement_label = ctk.CTkLabel(
             self,
@@ -355,14 +339,8 @@ class CTkPopup(ctk.CTkToplevel):
 
     def _update_text(self) -> None:
         """Render or update message text inside a label or scrollable text box."""
-        message_font = (
-            self._font
-            if self._font is not None
-            else ctk.CTkFont(size=MESSAGE_FONT_SIZE)
-        )
-        text_height = self._measure_text_height(
-            self._text, self._wraplength, message_font
-        )
+        message_font = self._font if self._font is not None else ctk.CTkFont(size=MESSAGE_FONT_SIZE)
+        text_height = self._measure_text_height(self._text, self._wraplength, message_font)
 
         if text_height <= self._max_label_height:
             if self._message_textbox is not None:
@@ -378,9 +356,7 @@ class CTkPopup(ctk.CTkToplevel):
                     font=message_font,
                     text_color=self._text_color,
                 )
-                self._message_label.pack(
-                    side="left", fill="both", expand=True, anchor="w"
-                )
+                self._message_label.pack(side="left", fill="both", expand=True, anchor="w")
             else:
                 config_kwargs: dict[str, Any] = {
                     "text": self._text,
@@ -427,32 +403,21 @@ class CTkPopup(ctk.CTkToplevel):
             self._message_textbox.insert("1.0", self._text)
             self._message_textbox.configure(state="disabled")
 
-    def _calculate_coordinates(
-        self, physical_width: int, physical_height: int
-    ) -> tuple[int, int]:
+    def _calculate_coordinates(self, physical_width: int, physical_height: int) -> tuple[int, int]:
         """Calculate physical (x, y) screen coordinates centered over master or monitor."""
         master = self.master
         master_is_visible = False
 
         if master is not None:
             with suppress(tk.TclError, AttributeError):
-                if (
-                    master.state() not in ("iconic", "withdrawn")
-                    and master.winfo_viewable()
-                ):
+                if master.state() not in ("iconic", "withdrawn") and master.winfo_viewable():
                     master_is_visible = True
 
         if master_is_visible:
-            target_x = (
-                master.winfo_rootx() + (master.winfo_width() - physical_width) // 2
-            )
-            target_y = (
-                master.winfo_rooty() + (master.winfo_height() - physical_height) // 2
-            )
+            target_x = master.winfo_rootx() + (master.winfo_width() - physical_width) // 2
+            target_y = master.winfo_rooty() + (master.winfo_height() - physical_height) // 2
         else:
-            screen_width, screen_height = scale(
-                self, self.winfo_screenwidth(), self.winfo_screenheight()
-            )
+            screen_width, screen_height = scale(self, self.winfo_screenwidth(), self.winfo_screenheight())
             target_x = (screen_width - physical_width) // 2
             target_y = (screen_height - physical_height) // 2
 
@@ -462,34 +427,22 @@ class CTkPopup(ctk.CTkToplevel):
         """Calculate DPI-aware coordinates and reveal window without geometry jump."""
         self.update_idletasks()
 
-        requested_width, requested_height = unscale(
-            self, self.winfo_reqwidth(), self.winfo_reqheight()
-        )
+        requested_width, requested_height = unscale(self, self.winfo_reqwidth(), self.winfo_reqheight())
         final_base_width = max(requested_width, self._width)
-        final_base_height = (
-            self._height if self._height is not None else requested_height
-        )
+        final_base_height = self._height if self._height is not None else requested_height
 
-        final_physical_width, final_physical_height = scale(
-            self, final_base_width, final_base_height
-        )
+        final_physical_width, final_physical_height = scale(self, final_base_width, final_base_height)
 
         if reposition:
-            target_x, target_y = self._calculate_coordinates(
-                final_physical_width, final_physical_height
-            )
-            self.geometry(
-                f"{final_base_width}x{final_base_height}+{target_x}+{target_y}"
-            )
+            target_x, target_y = self._calculate_coordinates(final_physical_width, final_physical_height)
+            self.geometry(f"{final_base_width}x{final_base_height}+{target_x}+{target_y}")
             self.deiconify()
             self.lift()
             self.focus_force()
         else:
             current_x = self.winfo_x()
             current_y = self.winfo_y()
-            self.geometry(
-                f"{final_base_width}x{final_base_height}+{current_x}+{current_y}"
-            )
+            self.geometry(f"{final_base_width}x{final_base_height}+{current_x}+{current_y}")
 
     @override
     def cget(self, attribute_name: str) -> Any:

@@ -84,25 +84,27 @@ app.mainloop()
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `headers` | `list[str] \| None` | `None` | List of column header titles. When `None`, the top header bar is omitted. |
+| `headers` | `list[str] \| dict[int \| str, str] \| None` | `None` | Column header titles. A sequential `list[str]` is the preferred method for initialization (e.g. `["ID", "Name"]`). Also accepts a `dict` for sparse creation or partial updates (e.g. `{1: "Full Name"}`), where unmentioned columns default to `""` (or optional `"default"` key). When `None`, column count falls back to `values[0]`. |
+| `show_headers` | `bool \| None` | `None` | Master visibility toggle for the pinned header bar. When `None` (default), resolves to `True` if `headers` is provided, and `False` if omitted. When set to `True` without headers, displays blank interactive headers for column sorting and resizing. |
 | `header_height` | `int` | `32` | Height of the top pinned header in logical pixels (minimum 20). |
 | `header_fg_color` | `str \| tuple[str, str] \| None` | `None` | Background fill color for the pinned column header bar (single color or `(light, dark)` tuple). Defaults to theme top frame color (`theme["CTkFrame"]["top_fg_color"]`). |
-| `header_text_color` | `str \| tuple[str, str] \| dict \| None` | `None` | Text color for column header titles. Accepts a single color, a `(light, dark)` tuple for all headers, or a dict for per-header overrides (e.g. `{"default": "#3B8ED0", 3: "#E06C75"}`). Defaults to theme label text color. |
-| `header_font` | `tuple \| CTkFont \| str \| dict \| None` | `None` | Font for column headers. Accepts a font tuple, `CTkFont`, or a dict for per-header overrides (with optional `"default"` key). Also accepts shortcuts (`"bold"`, `"italic"`, `"bold italic"`). Defaults to active theme bold font (`CTkFont(weight="bold")`). |
+| `header_text_color` | `str \| tuple[str, str] \| dict \| None` | `None` | *(Scoped Attribute)* Text color for column header titles. Accepts a single color or `(light, dark)` tuple (e.g. `"#3B8ED0"` or `("#1a1a1a", "#ffffff")`) or a dict for per-header overrides by index or header title (e.g. `{"default": "#3B8ED0", 3: "#E06C75", "Salary": "#E06C75"}`). Defaults to theme label text color. |
+| `header_font` | `tuple \| CTkFont \| str \| dict \| None` | `None` | *(Scoped Attribute)* Font for column headers (accepts a font tuple, `CTkFont`, or shortcuts `"bold"`, `"italic"`, `"bold italic"`). Accepts a single font (e.g. `"bold"`) or a dict for per-header overrides by index or header title (e.g. `{"default": ("Arial", 12), 0: "bold", "ID": "bold"}`). Defaults to active theme bold font (`CTkFont(weight="bold")`). |
 | `header_hover_color` | `str \| tuple[str, str] \| None` | `None` | Hover tint for sortable column headers (single color or `(light, dark)` tuple). When `None` (default), hover effect is disabled. |
-| `header_alignment` | `str \| dict` | `"left"` | Alignment of header titles (`"left"`, `"center"`, `"right"`). Accepts a single string to format all headers, or a dict for per-header overrides (with optional `"default"` key). |
-| `header_sortable` | `bool \| dict[int \| str, bool]` | `True` | Column header click sorting control. Accepts a boolean for all columns (e.g. `False` to lock all), or a dict for per-header control (e.g. `{0: False}` to disable sorting on column 0, or `{"default": False, 2: True}` to only permit sorting on column 2). If `"default"` is omitted in reconfigures, the active baseline is preserved. |
+| `header_alignment` | `str \| dict` | `"left"` | *(Scoped Attribute)* Alignment of header titles (`"left"`, `"center"`, `"right"`). Accepts a single string (e.g. `"center"`) or a dict for per-header overrides by index or header title (e.g. `{"default": "left", 0: "center", "ID": "center"}`). Defaults to `"left"`. |
+| `header_sortable` | `bool \| dict[int \| str, bool]` | `True` | *(Scoped Attribute)* Column header click sorting control. Accepts a single boolean (e.g. `False`) or a dict for per-header overrides by index or header title (e.g. `{"default": False, 2: True, "Age": True}`). Defaults to `True`. If `"default"` is omitted in reconfigures, the active baseline is preserved. |
 
 ### Dataset, Rows & Columns
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `values` | `list[list[Any]] \| None` | `None` | 2D list of row records representing the dataset. |
-| `column_widths` | `list[int] \| dict[int, int] \| None` | `None` | Widths in pixels for each column. When `None`, columns share available width equally. |
-| `sort_key` | `str \| Callable \| dict \| None` | `None` | Key for column sorting (`"str"`, `"int"`, `"float"`, `"date"`, or any custom `Callable`). Accepts a single key to format all columns, or a dict for per-column overrides (e.g. `{"default": "str", 0: "int", 3: my_key}`). Default is `"str"`. |
-| `justify` | `str \| dict \| None` | `None` | Body cell text alignment (`"left"`, `"center"`, `"right"`). Accepts a single string (e.g. `"center"`) or a dict (e.g. `{"default": "left", 3: "right"}`). Default is `"left"`. |
-| `text_color` | `str \| tuple[str, str] \| dict \| None` | `None` | Cell text color. Accepts a single color, a `(light, dark)` tuple for all cells, or a dict for per-column overrides (e.g. `{"default": ("gray10", "#DCE4EE"), 3: "#2ecc71"}`). Defaults to theme label text color. |
-| `font` | `tuple \| CTkFont \| str \| dict \| None` | `None` | Font for table body cells. Accepts a font tuple, `CTkFont`, or a dict for per-column overrides (with optional `"default"` key). Also accepts shortcuts (`"bold"`, `"italic"`, `"bold italic"`). Defaults to active theme font (`CTkFont()`). |
+| `values` | `list[list[Any]] \| None` | `None` | 2D list of row records representing the dataset. When `headers` is omitted, the length of the first row determines the column count. |
+| `show_columns` | `bool \| dict[int \| str, bool]` | `True` | *(Scoped Attribute)* Column visibility toggle. Accepts a boolean (e.g. `False`) or a dict for per-column overrides by index or header title (e.g. `{"default": True, 0: False, "Salary": False}`). Hidden columns are not displayed, but their data remains in the table. Defaults to `True`. |
+| `column_widths` | `int \| str \| dict \| None` | `None` | *(Scoped Attribute)* Widths for table columns (integer pixel width or `"auto"` flex space). Accepts a single width (e.g. `120`, `"auto"`) or a dict for per-column overrides by index or header title (e.g. `{"default": "auto", 0: 90, "Age": 130}`). When `None` (default), all columns balance available width equally. |
+| `sort_key` | `str \| Callable \| dict \| None` | `None` | *(Scoped Attribute)* Key for column sorting (`"str"`, `"int"`, `"float"`, `"date"`, or any custom `Callable`). Accepts a single sort key (e.g. `"int"`) or a dict for per-column overrides by index or header title (e.g. `{"default": "str", 0: "int", "Age": "int"}`). Defaults to `"str"`. |
+| `justify` | `str \| dict \| None` | `None` | *(Scoped Attribute)* Body cell text alignment (`"left"`, `"center"`, `"right"`). Accepts a single string (e.g. `"center"`) or a dict for per-column overrides by index or header title (e.g. `{"default": "left", 3: "right", "Salary": "right"}`). Defaults to `"left"`. |
+| `text_color` | `str \| tuple[str, str] \| dict \| None` | `None` | *(Scoped Attribute)* Cell text color. Accepts a single color or `(light, dark)` tuple (e.g. `"#2ecc71"` or `("gray10", "#DCE4EE")`) or a dict for per-column overrides by index or header title (e.g. `{"default": ("gray10", "#DCE4EE"), 3: "#2ecc71", "Status": "#2ecc71"}`). Defaults to theme label text color. |
+| `font` | `tuple \| CTkFont \| str \| dict \| None` | `None` | *(Scoped Attribute)* Font for table body cells (accepts a font tuple, `CTkFont`, or shortcuts `"bold"`, `"italic"`, `"bold italic"`). Accepts a single font (e.g. `"italic"`) or a dict for per-column overrides by index or header title (e.g. `{"default": ("Arial", 12), 1: "bold", "Name": "bold"}`). Defaults to active theme font (`CTkFont()`). |
 | `row_height` | `int` | `28` | Height of each body row in logical pixels (minimum 16). |
 | `row_color` | `str \| tuple[str, str] \| None` | `None` | Base row background color (single color or `(light, dark)` tuple). Defaults to container `fg_color` (uniform flat look). |
 | `alternate_row_color` | `str \| tuple[str, str] \| None` | `None` | Odd row background color for opt-in zebra striping (single color or `(light, dark)` tuple). Defaults to `None` (matches `row_color`, no striping). |
@@ -122,7 +124,7 @@ app.mainloop()
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `editable` | `bool \| dict[int \| str, bool]` | `False` | In-place cell editing control. Accepts a boolean for the whole table (e.g. `True`), or a dict for per-column control (e.g. `{"default": True, 0: False}` to lock column 0, or `{2: True}` to only permit editing column 2). If `"default"` is omitted in reconfigures, the active baseline is preserved. |
+| `editable` | `bool \| dict[int \| str, bool]` | `False` | *(Scoped Attribute)* In-place cell editing control. Accepts a single boolean (e.g. `True`) or a dict for per-column overrides by index or header title (e.g. `{"default": True, 0: False, "ID": False}`). Defaults to `False`. If `"default"` is omitted in reconfigures, the active baseline is preserved. |
 | `on_cell_edit` | `Callable \| None` | `None` | Callback fired on edit commit: `def on_edit(actual_row, col, old_val, new_val): ...` |
 
 
@@ -203,7 +205,19 @@ table.update_cell(0, 3, "$140,000")
 #### `.update_row(display_row: int, values: list[Any], notify: bool = True) -> None`
 Atomically updates an entire row record in-place. If the table is actively sorted by one of the modified columns, the sort order refreshes automatically.
 ```python
-table.update_row(0, [1, "Ada Lovelace", "Mathematician", "$150,000"])
+table.update_row(0, [1, "Ada Lovelace", "Mathematician", "£150,000"])
+```
+
+#### `.get_header(col_index: int) -> str`
+Returns the title text for the specified column header.
+```python
+title = table.get_header(1)  # e.g. "Name"
+```
+
+#### `.set_header(col_index: int, title: str) -> None`
+Updates the title for a specific column header without re-supplying the entire list.
+```python
+table.set_header(1, "Full Name")
 ```
 
 #### `.get_raw_row_index(display_row: int | Sequence[int]) -> int | list[int]`
@@ -327,24 +341,26 @@ print(f"Sorted on col {col}, Ascending: {is_asc}")
 
 ### Viewport & Navigation
 
-#### `.scroll_to(row: int | None = None, col: int | None = None) -> None`
-Scrolls the table viewport to bring the specified display row or column into view.
+#### `.scroll_to(row: int | None = None, col: int | str | None = None) -> None`
+Scrolls the table viewport to bring the specified display row or column (by index or header title) into view.
 ```python
 table.scroll_to(row=1500)  # Scroll vertically to row 1500
 table.scroll_to(row=0, col=5)  # Jump to top row, column 5
+table.scroll_to(col="Status")  # Jump to "Status" column
 ```
 
-#### `.auto_fit_column(col_index: int) -> None`
-Measures the text of all rows and the header title for the given column using font metrics, and adjusts the column width to fit content with padding.
+#### `.auto_fit_column(col_index: int | str) -> None`
+Measures the text of all rows and the header title for the given column (by index or header title) using font metrics, and adjusts the column width to fit content with padding.
 ```python
 table.auto_fit_column(1)  # Fit column 1 to longest text
+table.auto_fit_column("Department")  # Fit by header title
 ```
 
-#### `.auto_fit_columns(columns: list[int] | None = None) -> None`
-Measures and fits column widths for all columns (or a specified list of column indexes) in a single batched pass with one redraw cycle.
+#### `.auto_fit_columns(columns: list[int | str] | None = None) -> None`
+Measures and fits column widths for all columns (or a specified list of column indexes or header titles) in a single batched pass with one redraw cycle.
 ```python
 table.auto_fit_columns()  # Fit all columns to content on load
-table.auto_fit_columns([0, 1, 3])  # Fit specific subset of columns
+table.auto_fit_columns([0, 1, "Salary"])  # Fit specific subset of columns
 ```
 
 ---
@@ -369,6 +385,8 @@ table.edit_focused_cell()
 
 #### `.copy_selection() -> str`
 Copies currently highlighted rows or cells to the system clipboard as Tab-Separated Values (TSV) with newlines and returns the string. Pastes directly into Excel or text editors.
+- In row selection mode (`selection_target="row"`): exports the entire underlying row record from memory (including trailing hidden fields if surplus, or only existing items if short).
+- In cell selection mode (`selection_target="cell"`): exports only highlighted visible cells (missing items in short rows export as empty strings).
 ```python
 tsv_text = table.copy_selection()
 ```

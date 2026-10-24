@@ -58,7 +58,8 @@ class CTkTable(ctk.CTkFrame):
         fg_color: str | tuple[str, str] | None = None,
         border_color: str | tuple[str, str] | None = None,
         # Column Headers
-        headers: list[str] | None = None,
+        headers: list[str] | dict[int | str, str] | None = None,
+        show_headers: bool | None = None,
         header_height: int = DEFAULT_HEADER_HEIGHT,
         header_fg_color: str | tuple[str, str] | None = None,
         header_text_color: str | tuple[str, str] | dict[int | str, str | tuple[str, str]] | None = None,
@@ -69,7 +70,8 @@ class CTkTable(ctk.CTkFrame):
         | dict[int | str, Literal["left", "center", "right"]] = "left",
         # Dataset, Rows & Columns
         values: list[list[Any]] | None = None,
-        column_widths: list[int] | dict[int, int] | None = None,
+        show_columns: bool | dict[int | str, bool] = True,
+        column_widths: int | Literal["auto"] | dict[int | str, int | Literal["auto"]] | None = None,
         sort_key: Literal["str", "int", "float", "date"]
         | Callable[[Any], Any]
         | dict[int | str, Literal["str", "int", "float", "date"] | Callable[[Any], Any]]
@@ -113,19 +115,31 @@ class CTkTable(ctk.CTkFrame):
             **kwargs,
         )
 
-        # Core Collaborator Engines
-        self._data_model = TableDataModel(
-            values=values,
-            sort_key=sort_key,
-        )
         self._selection_manager = SelectionManager(
             target=selection_target,
             mode=selection_mode,
         )
         self._renderer = TableRenderer()
 
-        self._headers: list[str] | None = headers
-        self._column_widths: list[int] | dict[int, int] | None = column_widths
+        self._headers: list[str] | None = None
+        initial_cols = len(values[0]) if (values and len(values) > 0 and values[0]) else 0
+        self._apply_headers(headers, initial_cols=initial_cols)
+        self._show_headers: bool = (headers is not None) if show_headers is None else bool(show_headers)
+
+        # Core Collaborator Engines
+        self._raw_sort_key = sort_key
+        self._data_model = TableDataModel(
+            values=values,
+            sort_key=self._normalize_sort_key_for_model(sort_key),
+        )
+
+        # Column visibility rules
+        self._show_columns_default: bool = True
+        self._show_columns_cols: dict[int, bool] = {}
+        self._raw_show_columns = show_columns
+        self._set_show_columns_rules(show_columns)
+
+        self._column_widths: Any = column_widths
 
         # Column body styling
         self._justify = justify
@@ -137,12 +151,14 @@ class CTkTable(ctk.CTkFrame):
         # Editing rules
         self._editable_default: bool = False
         self._editable_cols: dict[int, bool] = {}
+        self._raw_editable = editable
         self._set_editable_rules(editable)
         self.on_cell_edit: Callable[[int, int, Any, Any], None] | None = on_cell_edit
 
         # Header sorting rules
         self._header_sortable_default: bool = True
         self._header_sortable_cols: dict[int, bool] = {}
+        self._raw_header_sortable = header_sortable
         self._set_header_sortable_rules(header_sortable)
 
         self._row_height: int = max(MIN_ROW_HEIGHT, row_height)
@@ -394,6 +410,41 @@ class CTkTable(ctk.CTkFrame):
             self._cached_header_fonts[c] = scaled_hf
             self._cached_header_font_objs[c] = tkfont.Font(font=scaled_hf)
 
+    def _resolve_col_index(self, key: int | str) -> int | None:
+        """Resolve an integer index or header title string into a logical column index."""
+        if isinstance(key, int):
+            return key
+        if str(key).lower() == "default":
+            return None
+        try:
+            return int(key)
+        except (ValueError, TypeError):
+            if self._headers is not None and key in self._headers:
+                return self._headers.index(key)
+            return None
+
+    def _normalize_scoped_dict[T](
+        self,
+        mapping: dict[int | str, T] | None,
+    ) -> tuple[T | None, dict[int, T]]:
+        """Split a scoped attribute dict into an optional default value and resolved {col_idx: value} pairs."""
+        if not isinstance(mapping, dict):
+            return None, {}
+
+        default_val: T | None = None
+        resolved: dict[int, T] = {}
+
+        for raw_k, v in mapping.items():
+            if str(raw_k).lower() == "default":
+                default_val = v
+                continue
+
+            idx = self._resolve_col_index(raw_k)
+            if idx is not None:
+                resolved[idx] = v
+
+        return default_val, resolved
+
     def _get_normalized_column_alignments(self) -> dict[int, str]:
         total_cols = self._get_total_cols()
         attr = self._justify
@@ -402,13 +453,13 @@ class CTkTable(ctk.CTkFrame):
             if align in ("left", "center", "right"):
                 return {c: align for c in range(total_cols)}
         if isinstance(attr, dict):
-            default_align = str(attr.get("default", "left")).lower()
-            res = {}
-            if "default" in attr and default_align in ("left", "center", "right"):
-                res = {c: default_align for c in range(total_cols)}
-            for k, v in attr.items():
-                if str(k).lower() != "default" and isinstance(v, str) and v.lower() in ("left", "center", "right"):
-                    res[int(k)] = v.lower()
+            default_val, resolved = self._normalize_scoped_dict(attr)
+            res: dict[int, str] = {}
+            if default_val is not None and str(default_val).lower() in ("left", "center", "right"):
+                res = {c: str(default_val).lower() for c in range(total_cols)}
+            for c, v in resolved.items():
+                if isinstance(v, str) and v.lower() in ("left", "center", "right"):
+                    res[c] = v.lower()
             return res
         return {}
 
@@ -419,35 +470,80 @@ class CTkTable(ctk.CTkFrame):
             if align in ("left", "center", "right"):
                 return {c: align for c in range(total_cols)}
         if isinstance(self._header_alignment, dict):
-            default_align = str(self._header_alignment.get("default", "left")).lower()
-            res = {}
-            if "default" in self._header_alignment and default_align in ("left", "center", "right"):
-                res = {c: default_align for c in range(total_cols)}
-            for k, v in self._header_alignment.items():
-                if str(k).lower() != "default" and isinstance(v, str) and v.lower() in ("left", "center", "right"):
-                    res[int(k)] = v.lower()
+            default_val, resolved = self._normalize_scoped_dict(self._header_alignment)
+            res: dict[int, str] = {}
+            if default_val is not None and str(default_val).lower() in ("left", "center", "right"):
+                res = {c: str(default_val).lower() for c in range(total_cols)}
+            for c, v in resolved.items():
+                if isinstance(v, str) and v.lower() in ("left", "center", "right"):
+                    res[c] = v.lower()
             return res
         return {}
 
     def _get_normalized_column_text_colors(self) -> dict[int, Any]:
         if isinstance(self._text_color, dict):
-            return {int(k): v for k, v in self._text_color.items() if str(k).lower() != "default"}
+            _, resolved = self._normalize_scoped_dict(self._text_color)
+            return resolved
         return {}
 
     def _get_normalized_header_text_colors(self) -> dict[int, Any]:
         if isinstance(self._header_text_color, dict):
-            return {int(k): v for k, v in self._header_text_color.items() if str(k).lower() != "default"}
+            _, resolved = self._normalize_scoped_dict(self._header_text_color)
+            return resolved
         return {}
 
     def _get_normalized_column_fonts(self) -> dict[int, Any]:
         if isinstance(self._font, dict):
-            return {int(k): v for k, v in self._font.items() if str(k).lower() != "default"}
+            _, resolved = self._normalize_scoped_dict(self._font)
+            return resolved
         return {}
 
     def _get_normalized_header_fonts(self) -> dict[int, Any]:
         if isinstance(self._header_font, dict):
-            return {int(k): v for k, v in self._header_font.items() if str(k).lower() != "default"}
+            _, resolved = self._normalize_scoped_dict(self._header_font)
+            return resolved
         return {}
+
+    def _normalize_sort_key_for_model(self, sort_key: Any) -> Any:
+        """Translate header title keys in sort_key dictionary to logical column indexes."""
+        if isinstance(sort_key, dict):
+            default_val, resolved = self._normalize_scoped_dict(sort_key)
+            result: dict[int | str, Any] = dict(resolved)
+            if default_val is not None:
+                result["default"] = default_val
+            return result
+        return sort_key
+
+    def _set_show_columns_rules(self, show_columns: bool | dict[int | str, bool]) -> None:
+        """Update column visibility state, preserving baseline when 'default' is omitted."""
+        self._raw_show_columns = show_columns
+        if isinstance(show_columns, dict):
+            default_val, resolved = self._normalize_scoped_dict(show_columns)
+            if default_val is not None:
+                self._show_columns_default = bool(default_val)
+            for k, v in resolved.items():
+                self._show_columns_cols[k] = bool(v)
+        else:
+            self._show_columns_default = bool(show_columns)
+            self._show_columns_cols.clear()
+
+    def _is_column_shown(self, col: int) -> bool:
+        """Check whether a logical column is marked visible."""
+        return self._show_columns_cols.get(col, self._show_columns_default)
+
+    def _get_visible_columns(self) -> list[int]:
+        """Return sorted list of logical column indexes that are currently visible."""
+        total_cols = self._get_total_cols()
+        return [c for c in range(total_cols) if self._is_column_shown(c)]
+
+    def _re_normalize_scoped_attributes(self) -> None:
+        """Re-normalize active scoped attribute dictionaries whenever headers change."""
+        self._set_show_columns_rules(self._raw_show_columns)
+        self._set_editable_rules(self._raw_editable)
+        self._set_header_sortable_rules(self._raw_header_sortable)
+        self._update_colors()
+        self._update_fonts()
+        self._data_model.set_sort_key_rules(self._normalize_sort_key_for_model(self._raw_sort_key))
 
     @override
     def _set_appearance_mode(self, mode_string: str) -> None:
@@ -462,6 +558,48 @@ class CTkTable(ctk.CTkFrame):
         self._re_grid_components()
         self._redraw()
 
+    def _apply_headers(self, headers: list[str] | dict[int | str, str] | None, initial_cols: int = 0) -> None:
+        """Apply or patch header titles from a list, dictionary, or None."""
+        if headers is None:
+            self._headers = None
+            return
+
+        if isinstance(headers, (list, tuple)):
+            self._headers = [str(h) for h in headers]
+            return
+
+        if isinstance(headers, dict):
+            if self._headers is not None:
+                new_headers = list(self._headers)
+                if "default" in headers:
+                    new_headers = [str(headers["default"])] * len(new_headers)
+            else:
+                total_cols = max(initial_cols, self._get_total_cols())
+                max_key = -1
+                for k in headers:
+                    if str(k).lower() != "default":
+                        try:
+                            max_key = max(max_key, int(k))
+                        except (ValueError, TypeError):
+                            pass
+                needed = max(total_cols, max_key + 1)
+                default_title = str(headers.get("default", ""))
+                new_headers = [default_title] * needed
+
+            for k, v in headers.items():
+                if str(k).lower() == "default":
+                    continue
+                try:
+                    idx = int(k)
+                    if idx >= len(new_headers):
+                        new_headers.extend([""] * (idx + 1 - len(new_headers)))
+                    if 0 <= idx < len(new_headers):
+                        new_headers[idx] = str(v)
+                except (ValueError, TypeError):
+                    pass
+
+            self._headers = new_headers
+
     def _get_border_spacing(self) -> int:
         border = int(self._border_width) if self._border_width else 0
         raw_spacing = self._border_spacing + border
@@ -470,7 +608,7 @@ class CTkTable(ctk.CTkFrame):
     def _re_grid_components(self) -> None:
         spacing = self._get_border_spacing()
 
-        if self._headers is not None:
+        if self._show_headers:
             self._header_canvas.grid(row=0, column=0, sticky="nsew", padx=(spacing, 0), pady=(spacing, 0))
             self._header_corner.grid(row=0, column=1, sticky="nsew", padx=(0, spacing), pady=(spacing, 0))
             body_pady = (0, 0)
@@ -493,37 +631,71 @@ class CTkTable(ctk.CTkFrame):
     def _get_total_cols(self) -> int:
         if self._headers is not None:
             return len(self._headers)
-        if self._data_model.row_count > 0 and self._data_model.values[0]:
+        if hasattr(self, "_data_model") and self._data_model.row_count > 0 and self._data_model.values[0]:
             return len(self._data_model.values[0])
         return 0
 
     def _calculate_column_geometry(self, canvas_width: int) -> tuple[list[int], list[int]]:
-        """Compute pixel widths and cumulative prefix-sum offsets for all columns."""
-        num_cols = self._get_total_cols()
-        if num_cols == 0:
+        """Compute pixel widths and cumulative prefix-sum offsets for all visible columns."""
+        visible_cols = self._get_visible_columns()
+        if not visible_cols:
             return [], [0]
 
         min_col_w = scale(self, MIN_COLUMN_WIDTH)
-        col_widths: list[int] = []
 
-        if self._column_widths is not None:
-            for c in range(num_cols):
-                if (isinstance(self._column_widths, list) and c < len(self._column_widths)) or (
-                    isinstance(self._column_widths, dict) and c in self._column_widths
-                ):
-                    w = scale(self, self._column_widths[c])
+        # 1. Resolve raw width target per visible column: either an int (unscaled px) or "auto"
+        col_targets: list[int | str] = []
+        if self._column_widths is None or (
+            isinstance(self._column_widths, str) and self._column_widths.lower() == "auto"
+        ):
+            col_targets = ["auto"] * len(visible_cols)
+        elif isinstance(self._column_widths, (int, float)):
+            col_targets = [max(MIN_COLUMN_WIDTH, int(self._column_widths))] * len(visible_cols)
+        elif isinstance(self._column_widths, dict):
+            default_val, resolved = self._normalize_scoped_dict(self._column_widths)
+            fallback = default_val if default_val is not None else "auto"
+            for c in visible_cols:
+                raw = resolved.get(c, fallback)
+                if isinstance(raw, str) and raw.lower() == "auto":
+                    col_targets.append("auto")
+                elif isinstance(raw, (int, float)):
+                    col_targets.append(max(MIN_COLUMN_WIDTH, int(raw)))
                 else:
-                    w = min_col_w
-                col_widths.append(max(min_col_w, w))
+                    col_targets.append("auto")
         else:
-            uniform_w = max(min_col_w, canvas_width // num_cols if canvas_width > 0 else min_col_w)
-            col_widths = [uniform_w] * num_cols
+            col_targets = ["auto"] * len(visible_cols)
 
-        # Stretch columns if they sum to less than canvas width
-        total_explicit_w = sum(col_widths)
-        if total_explicit_w < canvas_width and num_cols > 0:
-            col_widths[-1] += canvas_width - total_explicit_w
+        # 2. Scale fixed columns and identify auto columns (indices within visible_cols)
+        fixed_widths: dict[int, int] = {}
+        auto_indices: list[int] = []
+        for v_idx, target in enumerate(col_targets):
+            if isinstance(target, int):
+                fixed_widths[v_idx] = max(min_col_w, scale(self, target))
+            else:
+                auto_indices.append(v_idx)
 
+        # 3. Calculate auto column widths by distributing available slack space
+        total_fixed_w = sum(fixed_widths.values())
+        slack = max(0, canvas_width - total_fixed_w)
+        num_auto = len(auto_indices)
+
+        auto_widths: dict[int, int] = {}
+        if num_auto > 0:
+            base_auto = max(min_col_w, slack // num_auto)
+            remainder = max(0, slack - (base_auto * num_auto))
+            for i, v_idx in enumerate(auto_indices):
+                extra = 1 if i < remainder and (slack >= min_col_w * num_auto) else 0
+                auto_widths[v_idx] = base_auto + extra
+
+        # 4. Assemble final column widths list in visible order
+        col_widths: list[int] = []
+        for v_idx in range(len(visible_cols)):
+            if v_idx in fixed_widths:
+                col_widths.append(fixed_widths[v_idx])
+            else:
+                col_widths.append(auto_widths.get(v_idx, min_col_w))
+
+        # 5. Compute prefix-sum offsets
         col_offsets = [0]
         cumulative = 0
         for w in col_widths:
@@ -642,12 +814,12 @@ class CTkTable(ctk.CTkFrame):
                 self._scroll_y = float(target_y_bottom - canvas_height)
 
         if col is not None:
-            col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
-            total_cols = len(col_widths)
-            if total_cols > 0:
-                target_c = max(0, min(total_cols - 1, col))
-                target_x_left = col_offsets[target_c]
-                target_x_right = col_offsets[target_c + 1]
+            visible_cols = self._get_visible_columns()
+            if col in visible_cols:
+                _, col_offsets = self._calculate_column_geometry(canvas_width)
+                target_v = visible_cols.index(col)
+                target_x_left = col_offsets[target_v]
+                target_x_right = col_offsets[target_v + 1]
 
                 if target_x_left < self._scroll_x:
                     self._scroll_x = float(target_x_left)
@@ -662,12 +834,13 @@ class CTkTable(ctk.CTkFrame):
 
     def _set_editable_rules(self, editable: bool | dict[int | str, bool]) -> None:
         """Update editable state, preserving baseline when 'default' is omitted in incremental dict reconfigures."""
+        self._raw_editable = editable
         if isinstance(editable, dict):
-            if "default" in editable:
-                self._editable_default = bool(editable["default"])
-            for k, v in editable.items():
-                if str(k).lower() != "default":
-                    self._editable_cols[int(k)] = bool(v)
+            default_val, resolved = self._normalize_scoped_dict(editable)
+            if default_val is not None:
+                self._editable_default = bool(default_val)
+            for k, v in resolved.items():
+                self._editable_cols[k] = bool(v)
         else:
             self._editable_default = bool(editable)
             self._editable_cols.clear()
@@ -695,11 +868,15 @@ class CTkTable(ctk.CTkFrame):
         self.scroll_to(row=visual_row, col=col)
 
         canvas_width = self._table_canvas.winfo_width()
+        visible_cols = self._get_visible_columns()
+        if col not in visible_cols:
+            return
         col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
+        v_idx = visible_cols.index(col)
         scaled_row = self._get_scaled_row_height()
 
-        x_left = col_offsets[col] - self._scroll_x
-        col_w = col_widths[col]
+        x_left = col_offsets[v_idx] - self._scroll_x
+        col_w = col_widths[v_idx]
         y_top = visual_row * scaled_row - self._scroll_y
 
         try:
@@ -779,14 +956,15 @@ class CTkTable(ctk.CTkFrame):
             return None
 
         canvas_width = self._table_canvas.winfo_width()
-        col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
+        visible_cols = self._get_visible_columns()
+        _, col_offsets = self._calculate_column_geometry(canvas_width)
         scaled_row = self._get_scaled_row_height()
 
         row = int((pixel_y + self._scroll_y) // scaled_row)
-        col = bisect_right(col_offsets, pixel_x + self._scroll_x) - 1
+        v_idx = bisect_right(col_offsets, pixel_x + self._scroll_x) - 1
 
-        if 0 <= row < self._data_model.row_count and 0 <= col < len(col_widths):
-            return (row, col)
+        if 0 <= row < self._data_model.row_count and 0 <= v_idx < len(visible_cols):
+            return (row, visible_cols[v_idx])
         return None
 
     def _on_body_click(self, event: Any) -> None:
@@ -833,16 +1011,23 @@ class CTkTable(ctk.CTkFrame):
         if self._data_model.row_count == 0:
             return "break"
 
-        is_shift = bool(event.state & TK_SHIFT_MASK)
-        total_cols = self._get_total_cols()
+        visible_cols = self._get_visible_columns()
+        if not visible_cols:
+            return "break"
 
-        new_r, new_c = self._selection_manager.navigate(
-            delta_row=delta_row,
-            delta_col=delta_col,
-            total_rows=self._data_model.row_count,
-            total_cols=total_cols,
-            is_shift=is_shift,
-        )
+        is_shift = bool(event.state & TK_SHIFT_MASK)
+        total_rows = self._data_model.row_count
+
+        cur_r = self._selection_manager.focused_row if self._selection_manager.focused_row is not None else 0
+        new_r = max(0, min(total_rows - 1, cur_r + delta_row))
+
+        cur_c = self._selection_manager.focused_col if self._selection_manager.focused_col is not None else visible_cols[0]
+        cur_v = visible_cols.index(cur_c) if cur_c in visible_cols else 0
+        new_v = max(0, min(len(visible_cols) - 1, cur_v + delta_col))
+        new_c = visible_cols[new_v]
+
+        use_shift = is_shift and self._selection_manager.mode == "extended"
+        self._selection_manager.apply_click(new_r, new_c, is_ctrl=False, is_shift=use_shift)
 
         scroll_c = new_c if self._selection_manager.target == "cell" else None
         self.scroll_to(row=new_r, col=scroll_c)
@@ -923,12 +1108,13 @@ class CTkTable(ctk.CTkFrame):
 
     def _set_header_sortable_rules(self, header_sortable: bool | dict[int | str, bool]) -> None:
         """Update header sortable state, preserving baseline when 'default' is omitted in reconfigures."""
+        self._raw_header_sortable = header_sortable
         if isinstance(header_sortable, dict):
-            if "default" in header_sortable:
-                self._header_sortable_default = bool(header_sortable["default"])
-            for k, v in header_sortable.items():
-                if str(k).lower() != "default":
-                    self._header_sortable_cols[int(k)] = bool(v)
+            default_val, resolved = self._normalize_scoped_dict(header_sortable)
+            if default_val is not None:
+                self._header_sortable_default = bool(default_val)
+            for k, v in resolved.items():
+                self._header_sortable_cols[k] = bool(v)
         else:
             self._header_sortable_default = bool(header_sortable)
             self._header_sortable_cols.clear()
@@ -961,10 +1147,11 @@ class CTkTable(ctk.CTkFrame):
 
     def _on_header_motion(self, event: Any) -> None:
         """Update header cursor and hover highlight based on pointer position."""
-        if self._headers is None:
+        if not self._show_headers:
             return
 
         canvas_width = self._table_canvas.winfo_width()
+        visible_cols = self._get_visible_columns()
         col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
         logical_x = event.x + self._scroll_x
         divider_tol = scale(self, DIVIDER_HOVER_TOLERANCE)
@@ -977,13 +1164,13 @@ class CTkTable(ctk.CTkFrame):
                 self._hovered_header_col = None
                 self._redraw_header()
         elif not self._column_resizer.is_resizing:
-            col = bisect_right(col_offsets, logical_x) - 1
-            is_sortable = 0 <= col < len(col_widths) and self._is_column_header_sortable(col)
+            v_idx = bisect_right(col_offsets, logical_x) - 1
+            is_sortable = 0 <= v_idx < len(visible_cols) and self._is_column_header_sortable(visible_cols[v_idx])
             self._set_header_cursor("hand2" if is_sortable else "")
 
             # Check for header hover highlight if hover color is active
             if self._header_hover_color is not None:
-                new_hover = col if is_sortable else None
+                new_hover = v_idx if is_sortable else None
                 if new_hover != self._hovered_header_col:
                     self._hovered_header_col = new_hover
                     self._redraw_header()
@@ -1001,17 +1188,19 @@ class CTkTable(ctk.CTkFrame):
 
     def _on_header_click(self, event: Any) -> None:
         """Start dragging a column divider or sort the column that was clicked."""
+        canvas_width = self._table_canvas.winfo_width()
+        visible_cols = self._get_visible_columns()
+        col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
         if self._column_resizer.hover_divider_col is not None:
-            canvas_width = self._table_canvas.winfo_width()
-            col_widths, _ = self._calculate_column_geometry(canvas_width)
             divider = self._column_resizer.hover_divider_col
-            self._column_resizer.start_resize(divider, event.x, col_widths[divider - 1])
+            logical_c = visible_cols[divider - 1]
+            self._column_resizer.start_resize(logical_c, event.x, col_widths[divider - 1])
         else:
-            canvas_width = self._table_canvas.winfo_width()
-            col_widths, col_offsets = self._calculate_column_geometry(canvas_width)
-            clicked_c = bisect_right(col_offsets, event.x + self._scroll_x) - 1
-            if 0 <= clicked_c < len(col_widths) and self._is_column_header_sortable(clicked_c):
-                self._toggle_header_sort(clicked_c)
+            clicked_v = bisect_right(col_offsets, event.x + self._scroll_x) - 1
+            if 0 <= clicked_v < len(visible_cols):
+                logical_c = visible_cols[clicked_v]
+                if self._is_column_header_sortable(logical_c):
+                    self._toggle_header_sort(logical_c)
 
     def _on_header_drag(self, event: Any) -> None:
         """Resize the active column width as the user drags the mouse divider."""
@@ -1020,12 +1209,13 @@ class CTkTable(ctk.CTkFrame):
             new_w = self._column_resizer.calculate_drag_width(event.x, min_col_w)
 
             canvas_width = self._table_canvas.winfo_width()
+            visible_cols = self._get_visible_columns()
             col_widths, _ = self._calculate_column_geometry(canvas_width)
-            unscaled_widths = [unscale(self, w) for w in col_widths]
             resizing_col = self._column_resizer.resizing_col
             if resizing_col is not None:
-                unscaled_widths[resizing_col] = unscale(self, new_w)
-                self._column_widths = unscaled_widths
+                if not isinstance(self._column_widths, dict):
+                    self._column_widths = {visible_cols[v]: unscale(self, w) for v, w in enumerate(col_widths)}
+                self._column_widths[resizing_col] = unscale(self, new_w)
                 self._redraw()
 
     def _on_header_release(self, event: Any = None) -> None:
@@ -1040,6 +1230,7 @@ class CTkTable(ctk.CTkFrame):
     def _on_header_double_click(self, event: Any = None) -> None:
         """Snap column width to fit content and disarm drag resizing when a divider is double-clicked."""
         canvas_width = self._table_canvas.winfo_width()
+        visible_cols = self._get_visible_columns()
         _, col_offsets = self._calculate_column_geometry(canvas_width)
         divider_tol = scale(self, max(DIVIDER_HOVER_TOLERANCE * 2, 8))
         logical_x = (event.x + self._scroll_x) if (event is not None and hasattr(event, "x")) else None
@@ -1050,20 +1241,30 @@ class CTkTable(ctk.CTkFrame):
 
         if divider is not None:
             self._column_resizer.end_resize()
-            self.auto_fit_column(divider - 1)
+            logical_c = visible_cols[divider - 1]
+            self.auto_fit_column(logical_c)
             if event is not None and hasattr(event, "x"):
                 self._on_header_motion(event)
         elif event is not None:
             # Delegate rapid sequential clicks on the column header body directly to sorting
             self._on_header_click(event)
 
-    def auto_fit_columns(self, columns: list[int] | None = None) -> None:
+    def auto_fit_columns(self, columns: list[int | str] | None = None) -> None:
         """Calculate and snap column widths to fit content in a single batched pass."""
         total_cols = self._get_total_cols()
         if total_cols == 0:
             return
 
-        target_cols = [c for c in columns if 0 <= c < total_cols] if columns is not None else list(range(total_cols))
+        if columns is not None:
+            resolved_cols: list[int] = []
+            for item in columns:
+                idx = self._resolve_col_index(item)
+                if idx is not None and 0 <= idx < total_cols:
+                    resolved_cols.append(idx)
+            target_cols = resolved_cols
+        else:
+            target_cols = self._get_visible_columns()
+
         if not target_cols:
             return
 
@@ -1075,11 +1276,11 @@ class CTkTable(ctk.CTkFrame):
         padding = scale(self, AUTOFIT_PADDING_PX)
         sample_rows = min(AUTOFIT_SAMPLE_ROWS, self._data_model.row_count)
 
-        if isinstance(self._column_widths, list):
-            while len(self._column_widths) < total_cols:
-                self._column_widths.append(unscale(self, MIN_COLUMN_WIDTH))
-        elif not isinstance(self._column_widths, dict):
-            self._column_widths = {}
+        if not isinstance(self._column_widths, dict):
+            canvas_width = self._table_canvas.winfo_width()
+            visible_cols = self._get_visible_columns()
+            col_widths, _ = self._calculate_column_geometry(canvas_width)
+            self._column_widths = {visible_cols[v]: unscale(self, w) for v, w in enumerate(col_widths)}
 
         for col_index in target_cols:
             header_text = self._headers[col_index] if (self._headers and col_index < len(self._headers)) else None
@@ -1103,13 +1304,11 @@ class CTkTable(ctk.CTkFrame):
                 fallback_width=AUTOFIT_FALLBACK_WIDTH,
             )
             fit_width = unscale(self, fitted_w)
-
-            if isinstance(self._column_widths, (dict, list)):
-                self._column_widths[col_index] = fit_width
+            self._column_widths[col_index] = fit_width
 
         self._redraw()
 
-    def auto_fit_column(self, col_index: int) -> None:
+    def auto_fit_column(self, col_index: int | str) -> None:
         """Calculate and snap column width to fit header and cell text without locking other columns."""
         self.auto_fit_columns([col_index])
 
@@ -1119,16 +1318,18 @@ class CTkTable(ctk.CTkFrame):
 
     def _redraw_header(self) -> None:
         """Render the pinned table header bar with column dividers, sort glyphs, and hover highlights."""
-        if self._headers is None:
+        if not self._show_headers:
             return
 
         canvas_w = self._table_canvas.winfo_width()
         if canvas_w <= 1:
             return
 
+        visible_cols = self._get_visible_columns()
         col_widths, col_offsets = self._calculate_column_geometry(canvas_w)
         total_cols = len(col_widths)
         if total_cols == 0:
+            self._header_canvas.delete("all")
             return
 
         start_col = max(0, bisect_right(col_offsets, self._scroll_x) - 1 - self._overscan_cols)
@@ -1167,6 +1368,7 @@ class CTkTable(ctk.CTkFrame):
             header_font_objs=self._cached_header_font_objs,
             hovered_col=self._hovered_header_col,
             header_hover_color_hex=self._cached_colors.get("header_hover"),
+            visible_cols=visible_cols,
         )
 
     def _redraw(self) -> None:
@@ -1176,6 +1378,7 @@ class CTkTable(ctk.CTkFrame):
         if canvas_w <= 1 or canvas_h <= 1:
             return
 
+        visible_cols = self._get_visible_columns()
         col_widths, col_offsets = self._calculate_column_geometry(canvas_w)
         total_cols = len(col_widths)
         total_rows = self._data_model.row_count
@@ -1194,7 +1397,7 @@ class CTkTable(ctk.CTkFrame):
         divider_hex = self._cached_colors.get("divider", self._resolve_color(self._divider_color))
 
         # 1. Pinned Header Rendering
-        if self._headers is not None:
+        if self._show_headers:
             self._redraw_header()
 
         # 2. Body Viewport Rendering
@@ -1233,6 +1436,7 @@ class CTkTable(ctk.CTkFrame):
             col_text_colors=self._cached_col_text_colors,
             col_fonts=self._cached_col_fonts,
             col_font_objs=self._cached_col_font_objs,
+            visible_cols=visible_cols,
         )
 
         # 3. Synchronize Scrollbars
@@ -1402,6 +1606,16 @@ class CTkTable(ctk.CTkFrame):
                 if old_row[c] != values[c]:
                     self.on_cell_edit(storage_row, c, old_row[c], values[c])
 
+    def get_header(self, col_index: int) -> str:
+        """Return the header title for a specific column index."""
+        if self._headers is not None and 0 <= col_index < len(self._headers):
+            return self._headers[col_index]
+        return ""
+
+    def set_header(self, col_index: int, title: str) -> None:
+        """Set or update the title for a specific column header."""
+        self.configure(headers={col_index: title})
+
     def insert_row(self, index: int | None = None, values: list[Any] | None = None) -> int:
         """Insert a row at display position index (or append if None). Return the new display index."""
         self._cancel_edit()
@@ -1483,6 +1697,14 @@ class CTkTable(ctk.CTkFrame):
                 return self._data_model.values
             case "headers":
                 return self._headers
+            case "show_headers":
+                return self._show_headers
+            case "show_columns":
+                if not self._show_columns_cols:
+                    return self._show_columns_default
+                sc_res: dict[int | str, bool] = dict(self._show_columns_cols)
+                sc_res["default"] = self._show_columns_default
+                return sc_res
             case "column_widths":
                 return self._column_widths
             case "sort_key":
@@ -1555,8 +1777,22 @@ class CTkTable(ctk.CTkFrame):
             needs_redraw = True
 
         if "headers" in kwargs:
-            self._headers = kwargs.pop("headers")
+            new_headers = kwargs.pop("headers")
+            self._apply_headers(new_headers)
+            if "show_headers" not in kwargs:
+                self._show_headers = self._headers is not None
+            self._re_normalize_scoped_attributes()
             re_grid = True
+            needs_redraw = True
+
+        if "show_headers" in kwargs:
+            self._show_headers = bool(kwargs.pop("show_headers"))
+            re_grid = True
+            needs_redraw = True
+
+        if "show_columns" in kwargs:
+            self._set_show_columns_rules(kwargs.pop("show_columns"))
+            self._scroll_x = 0.0
             needs_redraw = True
 
         if "column_widths" in kwargs:
@@ -1610,7 +1846,9 @@ class CTkTable(ctk.CTkFrame):
             needs_redraw = True
 
         if "sort_key" in kwargs:
-            self._data_model.set_sort_key_rules(kwargs.pop("sort_key"))
+            sk = kwargs.pop("sort_key")
+            self._raw_sort_key = sk
+            self._data_model.set_sort_key_rules(self._normalize_sort_key_for_model(sk))
             needs_redraw = True
 
         if "on_cell_edit" in kwargs:

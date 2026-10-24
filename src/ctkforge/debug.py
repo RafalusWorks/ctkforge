@@ -33,9 +33,7 @@ def print_window_telemetry(window: Any) -> None:
     width = window.winfo_width()
     height = window.winfo_height()
     base_w, base_h = unscale(window, width, height)
-    base_req_w, base_req_h = unscale(
-        window, window.winfo_reqwidth(), window.winfo_reqheight()
-    )
+    base_req_w, base_req_h = unscale(window, window.winfo_reqwidth(), window.winfo_reqheight())
     scaling = (
         window._get_window_scaling()
         if hasattr(window, "_get_window_scaling")
@@ -44,18 +42,14 @@ def print_window_telemetry(window: Any) -> None:
 
     # Resolve window title
     title_text = (
-        window.title()
-        if callable(getattr(window, "title", None))
-        else getattr(window, "_title_text", "Untitled")
+        window.title() if callable(getattr(window, "title", None)) else getattr(window, "_title_text", "Untitled")
     )
 
     class_name = window.__class__.__name__
 
     print(f"\n--- {class_name} Telemetry ---")
     print(f"Title:         {title_text}")
-    print(
-        f"Physical Size: {width}x{height} px @ {scaling:g} ({int(scaling * 100)}%) Scaling"
-    )
+    print(f"Physical Size: {width}x{height} px @ {scaling:g} ({int(scaling * 100)}%) Scaling")
     print(f"Baseline Size: {base_w}x{base_h} px (96 DPI)")
     if hasattr(window, "_target_width"):
         print(f"Target Width:  {window._target_width} px")

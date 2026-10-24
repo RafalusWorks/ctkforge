@@ -105,9 +105,7 @@ class TableDataModel:
     def get_raw_row_index(self, display_row: int) -> int:
         """Translate a visual display row index to its raw row index in memory."""
         if not (0 <= display_row < len(self._row_indexes)):
-            raise IndexError(
-                f"Display row index {display_row} out of range [0, {len(self._row_indexes)})"
-            )
+            raise IndexError(f"Display row index {display_row} out of range [0, {len(self._row_indexes)})")
         return self._row_indexes[display_row]
 
     def get_display_row_index(self, raw_row: int) -> int:
@@ -115,9 +113,7 @@ class TableDataModel:
         try:
             return self._row_indexes.index(raw_row)
         except ValueError as err:
-            raise IndexError(
-                f"Raw row index {raw_row} not found in active display mapping"
-            ) from err
+            raise IndexError(f"Raw row index {raw_row} not found in active display mapping") from err
 
     def get_row(self, display_row: int) -> list[Any]:
         """Return a copy of the record at the specified display index."""
@@ -128,9 +124,7 @@ class TableDataModel:
         """Return the value of the cell at display row and column."""
         row_data = self.get_row(display_row)
         if not (0 <= col_index < len(row_data)):
-            raise IndexError(
-                f"Column index {col_index} out of range [0, {len(row_data)})"
-            )
+            raise IndexError(f"Column index {col_index} out of range [0, {len(row_data)})")
         return row_data[col_index]
 
     def get_all_rows(self) -> list[list[Any]]:
@@ -153,9 +147,7 @@ class TableDataModel:
         row_data[col_index] = value
         return old_value, raw_idx
 
-    def update_row(
-        self, display_row: int, values: list[Any], total_cols: int | None = None
-    ) -> tuple[list[Any], int]:
+    def update_row(self, display_row: int, values: list[Any], total_cols: int | None = None) -> tuple[list[Any], int]:
         """Update an entire row in storage at display_row.
 
         Args:

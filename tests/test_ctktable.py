@@ -6,7 +6,9 @@ from typing import Any
 
 import customtkinter as ctk
 
+from ctkforge.geometry import scale
 from ctkforge.table import CTkTable
+from ctkforge.table.constants import MIN_COLUMN_WIDTH
 
 DEMO_HEADERS: list[str] = ["ID", "Name", "Department", "Salary (£)", "Status"]
 DEMO_SORT_KEY: dict[int | str, str] = {0: "int", 3: "int"}
@@ -259,7 +261,7 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     # 19. Batched Auto-Fit Columns
     table.auto_fit_columns()
     step()
-    assert isinstance(table._column_widths, (list, dict)), "Column widths should be populated"
+    assert isinstance(table._column_widths, dict), "Column widths should be populated as a dict"
     print("[19/25] Batched Auto-Fit Columns: PASSED", flush=True)
 
     # 20. Justify, Header Alignments, and Sort Key (Dict with default key)
@@ -515,5 +517,369 @@ def test_column_color_dict_styling() -> None:
     ctk.set_appearance_mode("Dark")
 
 
+def test_column_widths_flex_and_auto() -> None:
+    """Verify column_widths flex and auto layout calculation and clamping."""
+    root = ctk.CTk()
+    root.geometry("600x400+9999+9999")
+    table = CTkTable(
+        root,
+        headers=["Col 0", "Col 1", "Col 2"],
+        values=[[1, 2, 3]],
+    )
+    table.pack(fill="both", expand=True)
+    root.update()
+
+    min_w = scale(table, MIN_COLUMN_WIDTH)
+
+    # 1. Uniform int width: all columns fixed to 120px scaled
+    table.configure(column_widths=120)
+    col_w, _ = table._calculate_column_geometry(600)
+    assert col_w == [scale(table, 120), scale(table, 120), scale(table, 120)]
+
+    # 2. Uniform auto: all columns evenly split available canvas width (600 / 3 = 200)
+    table.configure(column_widths="auto")
+    col_w, _ = table._calculate_column_geometry(600)
+    assert col_w == [200, 200, 200]
+
+    # 3. None also defaults to uniform auto
+    table.configure(column_widths=None)
+    col_w, _ = table._calculate_column_geometry(600)
+    assert col_w == [200, 200, 200]
+
+    # 4. Dict with "default": "auto", fixed col 0 (100) and fixed col 2 (150).
+    # Col 1 is auto, taking the remaining slack: 600 - scale(100) - scale(150)
+    table.configure(column_widths={"default": "auto", 0: 100, 2: 150})
+    col_w, _ = table._calculate_column_geometry(600)
+    expected_w0 = scale(table, 100)
+    expected_w2 = scale(table, 150)
+    expected_w1 = 600 - expected_w0 - expected_w2
+    assert col_w == [expected_w0, expected_w1, expected_w2]
+
+    # 5. Dict where "default" is omitted: defaults to "auto"
+    table.configure(column_widths={0: 100, 2: 150})
+    col_w, _ = table._calculate_column_geometry(600)
+    assert col_w == [expected_w0, expected_w1, expected_w2]
+
+    # 6. Multiple auto columns distribute slack equally
+    # Col 0 is fixed (100). Remaining slack is 600 - expected_w0.
+    # Col 1 and Col 2 split slack evenly.
+    table.configure(column_widths={"default": "auto", 0: 100})
+    col_w, _ = table._calculate_column_geometry(600)
+    slack = 600 - expected_w0
+    assert col_w[0] == expected_w0
+    assert col_w[1] + col_w[2] == slack
+    assert abs(col_w[1] - col_w[2]) <= 1
+
+    # 7. Fixed width below MIN_COLUMN_WIDTH (40px) clamps to min_col_w
+    table.configure(column_widths={"default": "auto", 0: 15, 1: 180, 2: 170})
+    col_w, _ = table._calculate_column_geometry(600)
+    assert col_w[0] == min_w
+    assert col_w[1] == scale(table, 180)
+    assert col_w[2] == scale(table, 170)
+
+    # 8. Viewport narrower than fixed widths clamps auto columns to min_col_w
+    table.configure(column_widths={"default": "auto", 0: 200, 2: 200})
+    col_w, _ = table._calculate_column_geometry(300)
+    assert col_w[0] == scale(table, 200)
+    assert col_w[1] == min_w
+    assert col_w[2] == scale(table, 200)
+
+    root.destroy()
+
+
+def test_show_headers_visibility() -> None:
+    """Verify show_headers controls header grid visibility, preserves names, and enables blank headers."""
+
+    class Event:
+        def __init__(self, x: int = 0, y: int = 10) -> None:
+            self.x = x
+            self.y = y
+
+    root = ctk.CTk()
+    root.geometry("600x400+9999+9999")
+
+    # 1. Default with headers: show_headers is True and canvas is mapped
+    table1 = CTkTable(root, headers=["A", "B"], values=[[1, 2]])
+    table1.pack(fill="both", expand=True)
+    root.update()
+    assert table1.cget("show_headers") is True
+    assert table1._header_canvas.winfo_ismapped()
+
+    # 2. Hide headers: show_headers is False, headers preserved, canvas un-gridded
+    table1.configure(show_headers=False)
+    root.update()
+    assert table1.cget("show_headers") is False
+    assert table1.cget("headers") == ["A", "B"]
+    assert not table1._header_canvas.winfo_ismapped()
+
+    # 3. Restore headers: show_headers is True, canvas re-gridded
+    table1.configure(show_headers=True)
+    root.update()
+    assert table1.cget("show_headers") is True
+    assert table1._header_canvas.winfo_ismapped()
+    table1.destroy()
+
+    # 4. Default without headers: show_headers is False and canvas un-gridded
+    table2 = CTkTable(root, values=[[10, 20]])
+    table2.pack(fill="both", expand=True)
+    root.update()
+    assert table2.cget("show_headers") is False
+    assert not table2._header_canvas.winfo_ismapped()
+    table2.destroy()
+
+    # 5. Explicit show_headers=True with headers=None: blank clickable headers for sorting
+    table3 = CTkTable(root, values=[[20, 2], [10, 1]], show_headers=True)
+    table3.pack(fill="both", expand=True)
+    root.update()
+    assert table3.cget("show_headers") is True
+    assert table3.cget("headers") is None
+    assert table3._get_total_cols() == 2
+    assert table3._header_canvas.winfo_ismapped()
+
+    # Click col 0 header to sort ascending
+    table3._on_header_click(Event(x=20))
+    root.update()
+    assert table3.get_sort_state() == (0, True)
+    assert table3.get_cell(0, 0) == 10
+
+    # Click col 0 header again to sort descending
+    table3._on_header_click(Event(x=20))
+    root.update()
+    assert table3.get_sort_state() == (0, False)
+    assert table3.get_cell(0, 0) == 20
+
+    table3.destroy()
+    root.destroy()
+
+
+def test_dictionary_and_partial_headers() -> None:
+    """Verify dictionary-based header creation, partial patching, get_header, and set_header."""
+    root = ctk.CTk()
+    root.geometry("600x400+9999+9999")
+
+    # 1. Initialize with list
+    table = CTkTable(root, headers=["ID", "Name", "Role"], values=[[1, "Alice", "Admin"]])
+    table.pack()
+    root.update()
+    assert table.cget("headers") == ["ID", "Name", "Role"]
+    assert table.get_header(1) == "Name"
+
+    # 2. Update specific header via set_header
+    table.set_header(1, "Full Name")
+    root.update()
+    assert table.cget("headers") == ["ID", "Full Name", "Role"]
+    assert table.get_header(1) == "Full Name"
+    assert table.get_header(0) == "ID"
+    assert table.get_header(2) == "Role"
+
+    # 3. Patch via configure dict
+    table.configure(headers={2: "Job Title"})
+    root.update()
+    assert table.cget("headers") == ["ID", "Full Name", "Job Title"]
+
+    # 4. Sparse dict initialization
+    table2 = CTkTable(root, headers={0: "Code", 2: "Cost"}, values=[[101, "Widget", 19.99]])
+    table2.pack()
+    root.update()
+    assert table2.cget("headers") == ["Code", "", "Cost"]
+    assert table2.get_header(0) == "Code"
+    assert table2.get_header(1) == ""
+    assert table2.get_header(2) == "Cost"
+
+    # 5. Dict with "default" key
+    table3 = CTkTable(root, headers={"default": "Data", 0: "ID"}, values=[[1, 2, 3]])
+    table3.pack()
+    root.update()
+    assert table3.cget("headers") == ["ID", "Data", "Data"]
+
+    table.destroy()
+    table2.destroy()
+    table3.destroy()
+    root.destroy()
+
+
+def test_copy_selection_asymmetric_column_and_row_lengths() -> None:
+    """Verify clipboard export with both surplus and missing row values."""
+    root = ctk.CTk()
+    root.geometry("500x350+9999+9999")
+
+    # Table with 3 headers:
+    # Row 0 has 5 values (2 surplus hidden values: "Hidden1", "Hidden2")
+    # Row 1 has 2 values (1 missing value for column 2)
+    table = CTkTable(
+        root,
+        headers=["Col 0", "Col 1", "Col 2"],
+        values=[
+            [101, "Alice", "Active", "Hidden1", "Hidden2"],
+            [102, "Bob"],
+        ],
+        copyable=True,
+        selection_mode="extended",
+    )
+    table.pack()
+    root.update()
+
+    # --- Scenario A: Surplus values (5 values in 3 columns) ---
+    # 1. Row mode exports all 5 values
+    table.select_row(0)
+    assert table.copy_selection() == "101\tAlice\tActive\tHidden1\tHidden2"
+
+    # 2. Cell mode exports only visible selected cells (3 values)
+    table.configure(selection_target="cell")
+    table.clear_selection(notify=False)
+    table.select_cell(0, 0)
+    table.select_cell(0, 1)
+    table.select_cell(0, 2)
+    assert table.copy_selection() == "101\tAlice\tActive"
+
+    # --- Scenario B: Missing values (2 values in 3 columns) ---
+    # 3. Row mode exports only the 2 existing values
+    table.configure(selection_target="row")
+    table.clear_selection(notify=False)
+    table.select_row(1)
+    assert table.copy_selection() == "102\tBob"
+
+    # 4. Cell mode exports 3 slots, with missing column 2 as empty string
+    table.configure(selection_target="cell")
+    table.clear_selection(notify=False)
+    table.select_cell(1, 0)
+    table.select_cell(1, 1)
+    table.select_cell(1, 2)
+    assert table.copy_selection() == "102\tBob\t"
+
+    table.destroy()
+    root.destroy()
+
+
+def test_show_columns_visibility_and_interaction() -> None:
+    """Verify show_columns boolean and dictionary overrides, geometry, hit-testing, and dynamic toggling."""
+    root = ctk.CTk()
+    root.geometry("800x500+9999+9999")
+
+    table = CTkTable(
+        root,
+        headers=["ID", "Name", "Department", "Salary", "Status"],
+        values=[
+            [101, "Alice", "Engineering", 120000, "Active"],
+            [102, "Bob", "Sales", 80000, "Active"],
+            [103, "Charlie", "Logistics", 45000, "On Leave"],
+        ],
+        show_columns={"default": True, "Department": False, 3: False},
+    )
+    table.pack(fill="both", expand=True)
+    root.update()
+
+    # 1. Active visible columns should only be [0, 1, 4] ("ID", "Name", "Status")
+    assert table._get_visible_columns() == [0, 1, 4]
+    cw = table._table_canvas.winfo_width()
+    col_w, col_offsets = table._calculate_column_geometry(cw)
+    assert len(col_w) == 3
+    assert len(col_offsets) == 4
+
+    # 2. Hit testing: clicking visible column index 2 maps to logical column 4 ("Status")
+    x_pos = (col_offsets[2] + col_offsets[3]) // 2
+    cell = table._get_cell_at(x_pos, 10)
+    assert cell == (0, 4)
+
+    # 3. Dynamic toggle via configure: hide Name (1) and show Salary (3)
+    table.configure(show_columns={"Name": False, "Salary": True})
+    root.update()
+    assert table._get_visible_columns() == [0, 3, 4]
+
+    # 4. Hide all columns: show_columns=False
+    table.configure(show_columns=False)
+    root.update()
+    assert table._get_visible_columns() == []
+    cw, co = table._calculate_column_geometry(600)
+    assert cw == []
+    assert co == [0]
+
+    # 5. Restore all columns: show_columns=True
+    table.configure(show_columns=True)
+    root.update()
+    assert table._get_visible_columns() == [0, 1, 2, 3, 4]
+
+    table.destroy()
+    root.destroy()
+
+
+def test_named_header_keys_scoped_attributes() -> None:
+    """Verify that all column-scoped attributes accept header title strings as dictionary keys."""
+    root = ctk.CTk()
+    root.geometry("800x500+9999+9999")
+
+    table = CTkTable(
+        root,
+        headers=["ID", "Name", "Department", "Salary", "Status"],
+        values=[
+            [101, "Alice", "Engineering", 120000, "Active"],
+            [102, "Bob", "Sales", 80000, "Active"],
+        ],
+        column_widths={"default": "auto", "ID": 70, "Salary": 140},
+        editable={"default": False, "Name": True},
+        header_sortable={"default": True, "Status": False},
+        justify={"default": "left", "ID": "center", "Salary": "right"},
+        text_color={"Salary": "#2ecc71"},
+        font={"Name": "bold"},
+        sort_key={"ID": "int", "Salary": "int"},
+        header_alignment={"ID": "center", "Salary": "right"},
+        header_text_color={"ID": "#ff0000"},
+        header_font={"Status": "bold"},
+        show_columns={"Department": False},
+    )
+    table.pack(fill="both", expand=True)
+    root.update()
+
+    # Verify column_widths resolved "ID" -> 0 (70) and "Salary" -> 3 (140)
+    default_w, norm_w = table._normalize_scoped_dict(table.cget("column_widths"))
+    assert default_w == "auto"
+    assert norm_w[0] == 70
+    assert norm_w[3] == 140
+
+    # Verify editable resolved "Name" -> 1
+    assert table._is_column_editable(0) is False
+    assert table._is_column_editable(1) is True
+    assert table._is_column_editable(3) is False
+
+    # Verify header_sortable resolved "Status" -> 4
+    assert table._is_column_header_sortable(0) is True
+    assert table._is_column_header_sortable(4) is False
+
+    # Verify justify resolved "ID" -> 0, "Salary" -> 3
+    alignments = table._get_normalized_column_alignments()
+    assert alignments[0] == "center"
+    assert alignments[3] == "right"
+    assert alignments[1] == "left"
+
+    # Verify text_color resolved "Salary" -> 3
+    text_colors = table._get_normalized_column_text_colors()
+    assert text_colors[3] == "#2ecc71"
+
+    # Verify sort_key resolved "ID" -> 0, "Salary" -> 3
+    assert table._data_model._sort_key_cols[0] == "int"
+    assert table._data_model._sort_key_cols[3] == "int"
+
+    # Verify header_alignment resolved "ID" -> 0, "Salary" -> 3
+    h_align = table._get_normalized_header_alignments()
+    assert h_align[0] == "center"
+    assert h_align[3] == "right"
+
+    # Verify show_columns resolved "Department" -> 2
+    assert table._is_column_shown(2) is False
+    assert table._is_column_shown(0) is True
+    assert table._get_visible_columns() == [0, 1, 3, 4]
+
+    table.destroy()
+    root.destroy()
+
+
 if __name__ == "__main__":
     run_headless_tests()
+    test_theme_color_pair_not_unpacked_as_columns()
+    test_column_color_dict_styling()
+    test_column_widths_flex_and_auto()
+    test_show_headers_visibility()
+    test_dictionary_and_partial_headers()
+    test_copy_selection_asymmetric_column_and_row_lengths()
+    test_show_columns_visibility_and_interaction()
+    test_named_header_keys_scoped_attributes()

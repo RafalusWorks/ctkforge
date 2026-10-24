@@ -55,7 +55,7 @@ class TableRenderer:
     def render_header(
         self,
         canvas: tk.Canvas,
-        headers: list[str],
+        headers: list[str] | None,
         col_widths: list[int],
         col_offsets: list[int],
         start_col: int,
@@ -77,9 +77,12 @@ class TableRenderer:
         header_font_objs: dict[int, tkfont.Font] | None = None,
         hovered_col: int | None = None,
         header_hover_color_hex: str | None = None,
+        visible_cols: list[int] | None = None,
     ) -> None:
         """Render the pinned table header bar with column dividers and sort glyphs."""
         canvas.delete("all")
+        if len(col_widths) == 0:
+            return
         header_w = canvas.winfo_width()
         if header_w <= 1:
             header_w = canvas_width
@@ -157,24 +160,26 @@ class TableRenderer:
         canvas.create_line(0, header_height - 1, header_w, header_height - 1, fill=divider_color_hex)
 
         # Columns
-        for c in range(start_col, end_col):
-            x_left = col_offsets[c] - scroll_x
-            x_right = col_offsets[c + 1] - scroll_x
-            col_w = col_widths[c]
+        for v_col in range(start_col, end_col):
+            x_left = col_offsets[v_col] - scroll_x
+            x_right = col_offsets[v_col + 1] - scroll_x
+            col_w = col_widths[v_col]
             max_w = col_w - (scaled_padding * 2)
 
-            if c > 0:
+            if v_col > 0:
                 canvas.create_line(x_left, 0, x_left, header_height, fill=divider_color_hex)
+
+            c = visible_cols[v_col] if visible_cols is not None else v_col
 
             # Determine column-specific header font and color
             col_h_font = header_fonts[c] if (header_fonts and c in header_fonts) else header_font
             col_h_font_obj = header_font_objs[c] if (header_font_objs and c in header_font_objs) else header_font_obj
             col_h_color = header_text_colors[c] if (header_text_colors and c in header_text_colors) else text_color_hex
 
-            base_title = headers[c] if c < len(headers) else f"Col {c + 1}"
+            base_title = headers[c] if (headers is not None and c < len(headers)) else ""
             if sort_col == c:
-                sort_arrow = " ▲" if sort_ascending else " ▼"
-                header_title = base_title + sort_arrow
+                glyph = "▲" if sort_ascending else "▼"
+                header_title = f"{base_title} {glyph}" if base_title else glyph
             else:
                 header_title = base_title
 
@@ -228,6 +233,7 @@ class TableRenderer:
         col_text_colors: dict[int, str] | None = None,
         col_fonts: dict[int, Any] | None = None,
         col_font_objs: dict[int, tkfont.Font] | None = None,
+        visible_cols: list[int] | None = None,
     ) -> None:
         """Render rows and cells within the visible viewport."""
         canvas.delete("all")
@@ -236,6 +242,7 @@ class TableRenderer:
 
         body_font_obj = tkfont.Font(font=body_font)
         is_row_target = selection_manager.target == "row"
+        num_visible = len(col_widths)
 
         for r in range(start_row, end_row):
             y_top = r * scaled_row_height - scroll_y
@@ -253,10 +260,14 @@ class TableRenderer:
             row_data = data_model.values[raw_row]
             row_len = len(row_data)
 
-            for c in range(start_col, min(end_col, row_len)):
-                x_left = col_offsets[c] - scroll_x
-                x_right = col_offsets[c + 1] - scroll_x
-                col_w = col_widths[c]
+            for v_col in range(start_col, min(end_col, num_visible)):
+                c = visible_cols[v_col] if visible_cols is not None else v_col
+                if c >= row_len:
+                    continue
+
+                x_left = col_offsets[v_col] - scroll_x
+                x_right = col_offsets[v_col + 1] - scroll_x
+                col_w = col_widths[v_col]
                 max_text_w = col_w - (scaled_padding * 2)
 
                 is_cell_selected = not is_row_target and (r, c) in selection_manager.selected_cells
@@ -264,7 +275,7 @@ class TableRenderer:
                 if is_cell_selected:
                     canvas.create_rectangle(x_left, y_top, x_right, y_bottom, fill=selected_bg_hex, outline="")
 
-                if c > 0:
+                if v_col > 0:
                     canvas.create_line(x_left, y_top, x_left, y_bottom, fill=divider_color_hex)
 
                 # Prioritize selection color over custom column text color

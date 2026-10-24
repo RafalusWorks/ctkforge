@@ -236,14 +236,9 @@ class SelectionManager:
     def adjust_indexes_after_insert(self, insert_display_pos: int) -> None:
         """Shift selected row and cell positions down when a new row is inserted."""
         if self._selected_rows:
-            self._selected_rows = {
-                r + 1 if r >= insert_display_pos else r for r in self._selected_rows
-            }
+            self._selected_rows = {r + 1 if r >= insert_display_pos else r for r in self._selected_rows}
         if self._selected_cells:
-            self._selected_cells = {
-                (r + 1, c) if r >= insert_display_pos else (r, c)
-                for r, c in self._selected_cells
-            }
+            self._selected_cells = {(r + 1, c) if r >= insert_display_pos else (r, c) for r, c in self._selected_cells}
         if self._focused_row is not None and self._focused_row >= insert_display_pos:
             self._focused_row += 1
         if self._anchor_row is not None and self._anchor_row >= insert_display_pos:
@@ -306,9 +301,7 @@ class SelectionManager:
                 cells = sorted(grouped[display_row], key=lambda x: x[0])
                 lines.append("\t".join(str(val) for _, val in cells))
         elif (
-            self._focused_row is not None
-            and self._focused_col is not None
-            and self._focused_row < data_model.row_count
+            self._focused_row is not None and self._focused_col is not None and self._focused_row < data_model.row_count
         ):
             try:
                 lines.append(str(data_model.get_cell(self._focused_row, self._focused_col)))
