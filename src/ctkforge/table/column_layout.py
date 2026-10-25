@@ -201,12 +201,20 @@ class ColumnLayoutManager:
         return ["auto"] * len(visible_cols)
 
     def _ensure_explicit_widths(self) -> None:
-        """Freeze the current on-screen widths into a per-column dict so single columns can be changed."""
-        if isinstance(self._column_widths, dict):
-            return
+        """Freeze flexible on-screen widths into fixed pixel sizes before single columns are modified."""
         visible_cols = self.get_visible_columns()
-        col_widths, _ = self.calculate_geometry(self._get_canvas_width())
-        self._column_widths = {visible_cols[i]: unscale(self._widget, w) for i, w in enumerate(col_widths)}
+        if not visible_cols:
+            return
+
+        col_targets = self._resolve_width_targets(visible_cols)
+        has_auto = any(isinstance(target, str) and target.lower() == "auto" for target in col_targets)
+
+        if has_auto:
+            col_widths, _ = self.calculate_geometry(self._get_canvas_width())
+            self._column_widths = {visible_cols[i]: unscale(self._widget, w) for i, w in enumerate(col_widths)}
+        elif not isinstance(self._column_widths, dict):
+            default_val = self._column_widths
+            self._column_widths = {"default": default_val}
 
     # -------------------------------------------------------------------------
     # Auto-Fit

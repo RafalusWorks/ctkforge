@@ -76,7 +76,7 @@ table4.configure(show_columns={"Salary": True, "Department": False})
 ### Column Widths & Auto-Fitting
 
 Column sizing is controlled via the scoped attribute `column_widths`:
-* **`"auto"` (Default)**: Automatically distributes all available widget width equally across columns.
+* **`"auto"` (Default)**: Evenly distributes available table width across columns and flexes with window resizing. The moment any column is manually dragged or auto-fitted, all columns freeze at their current rendered pixel widths—expanding a column pushes trailing columns to the right into the horizontal scroll area rather than squishing neighboring columns.
 * **Integer Pixel Width**: Assigns a fixed pixel width across all columns (e.g. `column_widths=120`).
 * **Dictionary Override**: Configures specific column widths by header title, column index, or both, with an optional `"default"` fallback:
   ```python
@@ -87,6 +87,12 @@ Column sizing is controlled via the scoped attribute `column_widths`:
       column_widths={"default": "auto", "ID": 80, 2: 110},
   )
   ```
+
+> [!TIP]
+> To unfreeze columns and restore dynamic window flexing after manual resizing, reconfigure the table:
+> ```python
+> table.configure(column_widths="auto")
+> ```
 
 #### Auto-Fitting Columns in Code
 To measure cell content and snap columns to fit text without manual pixel calculations, call auto-fit methods:
@@ -295,8 +301,8 @@ table.sort_by(2, ascending=False)
 # Restore original baseline order:
 table.clear_sort()
 
-# Bake current sorted order permanently into the raw dataset:
-table.commit_sort()
+# Freeze current sorted visual layout as static manual order:
+table.freeze_sort()
 
 # Inspect current sort column and direction:
 sort_col, is_ascending = table.get_sort_state()  # e.g. (2, False)
@@ -423,24 +429,27 @@ current_title = table.get_header(1)  # e.g. "Name"
 table.set_header(1, "Full Name")
 ```
 
-### Display Indexes vs. Raw Storage Indexes
+### Display Rows vs. Permanent Row IDs (`row_id`)
 
-`CTkTable` separates visual display order from raw storage order. When a user sorts a table by a column, underlying dataset records are not copied or reshuffled in memory; only an internal index map is adjusted.
+`CTkTable` cleanly separates the visual screen position from the persistent identity of each record:
 
-* **Display Row Index**: The visual row position currently shown on screen (`0` is top visible row). Changes whenever the table is sorted.
-* **Raw Storage Index**: The permanent position of the record in the original dataset (`values`). Never changes during sorting.
+* **`display_row` (Visual Screen Position)**: Where the row is currently rendered on screen (`0` is the top visible row). Changes whenever the user sorts, filters, or scrolls.
+* **`row_id` (Permanent Origin Identity)**: The immutable birth certificate ID assigned when the record is loaded or inserted (`0, 1, 2, ...`). It **never changes**, surviving sorting, filtering, editing, and `freeze_sort()`. This guarantees your records always remain tied to external source files or database primary keys.
 
 ```python
-# Translate a visual display index to its permanent raw storage index:
-raw_row = table.get_raw_row_index(visual_row)
+# 1. Translate a visual display row to its permanent row ID:
+row_id = table.get_row_id(visual_row)  # e.g. visual_row 0 --> row_id 42
 
-# Or translate multiple selected rows at once:
-raw_rows = table.get_raw_row_index(table.get_selected_rows())
+# 2. Translate multiple selected rows at once:
+selected_ids = table.get_row_id(table.get_selected_rows())
 
-# Translate in reverse: find where raw record #5 is currently displayed:
-display_row = table.get_display_row_index(5)
-table.select_row(display_row)
-table.scroll_to(row=display_row)
+# 3. Translate in reverse: find where record with row_id=42 is currently displayed:
+disp_row = table.get_display_row(42)
+table.select_row(disp_row)
+table.scroll_to(row=disp_row)
+
+# 4. Fetch the record values directly by row_id:
+record = table.get_row_by_id(42)
 ```
 
 ### Reading & Exporting Data

@@ -41,10 +41,10 @@ class ColumnResizer:
         """Find which column divider line is within tolerance of the given X coordinate.
 
         Returns:
-            The matched divider index (1 to N-1), or None if no divider is close enough.
+            The matched divider index (1 to N), or None if no divider is close enough.
         """
         matched_divider: int | None = None
-        for c in range(1, len(col_offsets) - 1):
+        for c in range(1, len(col_offsets)):
             if abs(logical_x - col_offsets[c]) <= tolerance:
                 matched_divider = c
                 break

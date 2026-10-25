@@ -229,20 +229,30 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     assert table._scroll_controller.scroll_y == 0.0, "Viewport should scroll back to top"
     print("[16/25] Scrolling and Viewport Clamping: PASSED", flush=True)
 
-    # 17. Index Resolution (Display <-> Raw)
+    # 17. Row ID & Display Resolution and Freeze Sort
     clean_slate_reset()
     table.sort_by(3, ascending=True)
     step()
-    assert table.get_raw_row_index(0) == 2, "Lowest salary should map to raw index 2"
-    assert table.get_display_row_index(2) == 0, "Raw index 2 should map to display row 0"
-    assert table.get_raw_row_index([0, 1]) == [2, 6], "List of display indexes should translate to list"
-    assert table.get_display_row_index([2, 6]) == [0, 1], "List of raw indexes should translate to list"
-    table.clear_sort()
+    assert table.get_row_id(0) == 2, "Lowest salary should map to row_id 2"
+    assert table.get_display_row(2) == 0, "Row ID 2 should map to display row 0"
+    assert table.get_row_id([0, 1]) == [2, 6], "List of display indexes should translate to row_ids"
+    assert table.get_display_row([2, 6]) == [0, 1], "List of row_ids should translate to display indexes"
+    assert table.get_row_by_id(2)[1] == "Charlie Day", "get_row_by_id should return row data"
+
+    # Test freeze_sort
+    table.freeze_sort()
     step()
-    assert table.get_raw_row_index(2) == 2, "Unsorted display row 2 maps to raw index 2"
-    assert table.get_display_row_index(2) == 2, "Unsorted raw index 2 maps to display row 2"
-    assert table.get_raw_row_index([1, 2]) == [1, 2], "Unsorted list should translate 1:1"
-    print("[17/25] Index Resolution (Display <-> Raw): PASSED", flush=True)
+    assert table.get_sort_state() == (None, True), "freeze_sort should clear active sort state"
+    assert table.get_row_id(0) == 2, "Lowest salary should STILL map to row_id 2 after freeze_sort"
+    assert table.get_display_row(2) == 0, "Row ID 2 should STILL map to display row 0 after freeze_sort"
+
+    # Verify inserted row receives unique row_id
+    new_disp = table.insert_row(values=[777, "New Employee", "Tech", 80000, "Active"])
+    new_id = table.get_row_id(new_disp)
+    assert new_id >= 8, "New row should receive a unique auto-incremented row_id"
+    assert table.get_row_by_id(new_id)[1] == "New Employee", "get_row_by_id should retrieve inserted row"
+    table.delete_rows(new_disp)
+    print("[17/25] Row ID & Display Resolution: PASSED", flush=True)
 
     # 18. Atomic Row Update
     table.update_row(0, [999, "Alice Updated", "Engineering", 130000, "Active"], notify=False)
@@ -252,10 +262,10 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     table.sort_by(3, ascending=True)
     step()
     disp_lowest = 0
-    raw_target = table.get_raw_row_index(disp_lowest)
+    id_target = table.get_row_id(disp_lowest)
     table.update_row(disp_lowest, [103, "Charlie Day", "Logistics", 200000, "Promoted"], notify=False)
     step()
-    assert table.get_raw_row_index(0) != raw_target, "Re-sort should move promoted record"
+    assert table.get_row_id(0) != id_target, "Re-sort should move promoted record"
     print("[18/25] Atomic Row Update: PASSED", flush=True)
 
     # 19. Batched Auto-Fit Columns
@@ -583,6 +593,23 @@ def test_column_widths_flex_and_auto() -> None:
     assert col_w[0] == scale(table, 200)
     assert col_w[1] == min_w
     assert col_w[2] == scale(table, 200)
+
+    # 9. Resizing any column when "auto" is active freezes all columns (Behavior A: no squishing)
+    table.configure(column_widths={"default": "auto"})
+    root.update()
+    canvas_w = table._layout_mgr._get_canvas_width()
+    col_w_before, _ = table._layout_mgr.calculate_geometry(canvas_w)
+    table._layout_mgr.set_column_width(0, scale(table, 400))
+    col_w_after, _ = table._layout_mgr.calculate_geometry(canvas_w)
+    assert col_w_after[0] == scale(table, 400)
+    assert col_w_after[1] == col_w_before[1]
+    assert col_w_after[2] == col_w_before[2]
+
+    # 10. Expanding window retains fixed widths for all columns, including the last column
+    col_w_expanded, _ = table._layout_mgr.calculate_geometry(canvas_w + 500)
+    assert col_w_expanded[0] == scale(table, 400)
+    assert col_w_expanded[1] == col_w_before[1]
+    assert col_w_expanded[2] == col_w_before[2]
 
     root.destroy()
 
@@ -967,7 +994,7 @@ def test_divider_drag_resizes_column_left_of_divider() -> None:
     visible_cols = table._layout_mgr.get_visible_columns()
     assert visible_cols == [0, 2, 3, 4]
 
-    for divider in range(1, len(visible_cols)):
+    for divider in range(1, len(visible_cols) + 1):
         table.configure(column_widths={"default": 120})
         root.update()
         _, offsets = table._layout_mgr.calculate_geometry(table._table_canvas.winfo_width())

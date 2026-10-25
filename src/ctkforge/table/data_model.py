@@ -26,6 +26,8 @@ class TableDataModel:
     ) -> None:
         """Initialize dataset storage, visual row mappings, and sort key rules."""
         self._values: list[list[Any]] = [list(row) for row in values] if values is not None else []
+        self._row_ids: list[int] = list(range(len(self._values)))
+        self._next_row_id: int = len(self._values)
         self._row_indexes: list[int] = list(range(len(self._values)))
         self._sort_key_default: SortKey = "str"
         self._sort_key_cols: dict[int, SortKey] = {}
@@ -96,29 +98,45 @@ class TableDataModel:
                     continue
 
     def reset_values(self, new_values: list[list[Any]] | None) -> None:
-        """Replace the dataset and reset virtual sorting state."""
+        """Replace the dataset and reset virtual sorting state and row IDs."""
         self._values = [list(row) for row in new_values] if new_values is not None else []
+        self._row_ids = list(range(len(self._values)))
+        self._next_row_id = len(self._values)
         self._row_indexes = list(range(len(self._values)))
         self._sort_col = None
         self._sort_ascending = True
 
-    def get_raw_row_index(self, display_row: int) -> int:
-        """Translate a visual display row index to its raw row index in memory."""
+    def get_storage_index(self, display_row: int) -> int:
+        """Translate a visual display row index to its storage index in memory."""
         if not (0 <= display_row < len(self._row_indexes)):
             raise IndexError(f"Display row index {display_row} out of range [0, {len(self._row_indexes)})")
         return self._row_indexes[display_row]
 
-    def get_display_row_index(self, raw_row: int) -> int:
-        """Translate a raw row index to its current visual display index."""
+    def get_row_id(self, display_row: int) -> int:
+        """Return the permanent row ID for a given visual display row."""
+        storage_idx = self.get_storage_index(display_row)
+        return self._row_ids[storage_idx]
+
+    def get_display_row(self, row_id: int) -> int:
+        """Translate a permanent row ID to its current visual display index."""
         try:
-            return self._row_indexes.index(raw_row)
+            storage_idx = self._row_ids.index(row_id)
         except ValueError as err:
-            raise IndexError(f"Raw row index {raw_row} not found in active display mapping") from err
+            raise IndexError(f"Row ID {row_id} not found in active dataset") from err
+        return self._row_indexes.index(storage_idx)
+
+    def get_row_by_id(self, row_id: int) -> list[Any]:
+        """Return a copy of the record matching the specified permanent row ID."""
+        try:
+            storage_idx = self._row_ids.index(row_id)
+        except ValueError as err:
+            raise IndexError(f"Row ID {row_id} not found in active dataset") from err
+        return list(self._values[storage_idx])
 
     def get_row(self, display_row: int) -> list[Any]:
         """Return a copy of the record at the specified display index."""
-        raw_index = self.get_raw_row_index(display_row)
-        return list(self._values[raw_index])
+        storage_idx = self.get_storage_index(display_row)
+        return list(self._values[storage_idx])
 
     def get_cell(self, display_row: int, col_index: int) -> Any:
         """Return the value of the cell at display row and column."""
@@ -135,17 +153,17 @@ class TableDataModel:
         """Update a single cell value in storage.
 
         Returns:
-            A tuple of (old_value, raw_row_index).
+            A tuple of (old_value, row_id).
         """
-        raw_idx = self.get_raw_row_index(display_row)
-        row_data = self._values[raw_idx]
+        storage_idx = self.get_storage_index(display_row)
+        row_data = self._values[storage_idx]
 
         while len(row_data) <= col_index:
             row_data.append("")
 
         old_value = row_data[col_index]
         row_data[col_index] = value
-        return old_value, raw_idx
+        return old_value, self._row_ids[storage_idx]
 
     def update_row(self, display_row: int, values: list[Any], total_cols: int | None = None) -> tuple[list[Any], int]:
         """Update an entire row in storage at display_row.
@@ -156,15 +174,15 @@ class TableDataModel:
             total_cols: Optional minimum column count to pad missing columns with empty strings.
 
         Returns:
-            A tuple of (old_row_values, raw_row_index).
+            A tuple of (old_row_values, row_id).
         """
-        raw_idx = self.get_raw_row_index(display_row)
-        old_values = list(self._values[raw_idx])
+        storage_idx = self.get_storage_index(display_row)
+        old_values = list(self._values[storage_idx])
         new_row = list(values)
         if total_cols is not None and len(new_row) < total_cols:
             new_row.extend([""] * (total_cols - len(new_row)))
-        self._values[raw_idx] = new_row
-        return old_values, raw_idx
+        self._values[storage_idx] = new_row
+        return old_values, self._row_ids[storage_idx]
 
     def insert_row(
         self,
@@ -175,10 +193,10 @@ class TableDataModel:
         """Insert a row at the requested display index (or append if None).
 
         Returns:
-            A tuple of (visual_insert_index, storage_insert_index).
+            A tuple of (visual_insert_index, row_id).
         """
         if display_index is not None and self._sort_col is not None:
-            self.commit_sort()
+            self.freeze_sort()
 
         if row_values is None:
             new_record = ["" for _ in range(total_cols)]
@@ -188,7 +206,11 @@ class TableDataModel:
                 new_record.extend([""] * (total_cols - len(new_record)))
 
         storage_insert_pos = len(self._values)
+        new_row_id = self._next_row_id
+        self._next_row_id += 1
+
         self._values.append(new_record)
+        self._row_ids.append(new_row_id)
 
         if display_index is None or display_index >= len(self._row_indexes):
             visual_insert_pos = len(self._row_indexes)
@@ -197,7 +219,7 @@ class TableDataModel:
             visual_insert_pos = max(0, display_index)
             self._row_indexes.insert(visual_insert_pos, storage_insert_pos)
 
-        return visual_insert_pos, storage_insert_pos
+        return visual_insert_pos, new_row_id
 
     def delete_rows(self, display_indexes: list[int] | set[int] | int) -> set[int]:
         """Delete records by display index using a linear single-pass index reconstruction.
@@ -217,16 +239,19 @@ class TableDataModel:
         storage_to_delete = {self._row_indexes[idx] for idx in valid_targets}
 
         kept_values: list[list[Any]] = []
+        kept_row_ids: list[int] = []
         old_to_new_storage_map: dict[int, int] = {}
         new_storage_idx = 0
 
         for old_idx, row_data in enumerate(self._values):
             if old_idx not in storage_to_delete:
                 kept_values.append(row_data)
+                kept_row_ids.append(self._row_ids[old_idx])
                 old_to_new_storage_map[old_idx] = new_storage_idx
                 new_storage_idx += 1
 
         self._values = kept_values
+        self._row_ids = kept_row_ids
 
         new_row_indexes: list[int] = []
         for display_idx, old_storage in enumerate(self._row_indexes):
@@ -292,11 +317,12 @@ class TableDataModel:
         self._sort_col = None
         self._sort_ascending = True
 
-    def commit_sort(self) -> None:
-        """Permanently bake current visual sorted order into storage and reset sort flags."""
+    def freeze_sort(self) -> None:
+        """Lock current visual sorted order into storage and reset sort flags while preserving row IDs."""
         if self._sort_col is None:
             return
         self._values = [self._values[i] for i in self._row_indexes]
+        self._row_ids = [self._row_ids[i] for i in self._row_indexes]
         self._row_indexes = list(range(len(self._values)))
         self._sort_col = None
         self._sort_ascending = True

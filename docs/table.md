@@ -100,7 +100,7 @@ app.mainloop()
 | :--- | :--- | :--- | :--- |
 | `values` | `list[list[Any]] \| None` | `None` | 2D list of row records representing the dataset. When `headers` is omitted, the length of the first row determines the column count. |
 | `show_columns` | `bool \| dict[int \| str, bool]` | `True` | *(Scoped Attribute)* Column visibility toggle. Accepts a boolean (e.g. `False`) or a dict for per-column overrides by index or header title (e.g. `{"default": True, 0: False, "Salary": False}`). Hidden columns are not displayed, but their data remains in the table. Defaults to `True`. |
-| `column_widths` | `int \| str \| dict \| None` | `None` | *(Scoped Attribute)* Widths for table columns (integer pixel width or `"auto"` flex space). Accepts a single width (e.g. `120`, `"auto"`) or a dict for per-column overrides by index or header title (e.g. `{"default": "auto", 0: 90, "Age": 130}`). When `None` (default), all columns balance available width equally. |
+| `column_widths` | `int \| str \| dict \| None` | `None` | *(Scoped Attribute)* Column widths in logical pixels or `"auto"` flex space. When `None` (default) or `"auto"`, columns flex with window resizing until manually resized. Accepts an int (e.g. `120`), `"auto"`, or a dict for per-column overrides by index or header title (e.g. `{"default": "auto", 0: 90, "Age": 130}`). |
 | `sort_key` | `str \| Callable \| dict \| None` | `None` | *(Scoped Attribute)* Key for column sorting (`"str"`, `"int"`, `"float"`, `"date"`, or any custom `Callable`). Accepts a single sort key (e.g. `"int"`) or a dict for per-column overrides by index or header title (e.g. `{"default": "str", 0: "int", "Age": "int"}`). Defaults to `"str"`. |
 | `justify` | `str \| dict \| None` | `None` | *(Scoped Attribute)* Body cell text alignment (`"left"`, `"center"`, `"right"`). Accepts a single string (e.g. `"center"`) or a dict for per-column overrides by index or header title (e.g. `{"default": "left", 3: "right", "Salary": "right"}`). Defaults to `"left"`. |
 | `text_color` | `str \| tuple[str, str] \| dict \| None` | `None` | *(Scoped Attribute)* Cell text color. Accepts a single color or `(light, dark)` tuple (e.g. `"#2ecc71"` or `("gray10", "#DCE4EE")`) or a dict for per-column overrides by index or header title (e.g. `{"default": ("gray10", "#DCE4EE"), 3: "#2ecc71", "Status": "#2ecc71"}`). Defaults to theme label text color. |
@@ -179,7 +179,7 @@ first_name = table.get(0, 1)
 #### `.insert_row(index: int | None = None, values: list[Any] | None = None) -> int`
 Inserts a new record into the dataset.
 - If `index=None`: appends the row to the dataset (respecting any active column sort).
-- If `index` is specified: automatically bakes any active sort into the baseline (`commit_sort()`) and inserts the record directly at that visual row position so it stays in place.
+- If `index` is specified: automatically freezes any active sort into static manual order (`freeze_sort()`) and inserts the record directly at that visual row position so it stays in place.
 - Returns the new display index.
 ```python
 # Append to end (or sorted slot if sorted):
@@ -220,31 +220,37 @@ Updates the title for a specific column header without re-supplying the entire l
 table.set_header(1, "Full Name")
 ```
 
-#### `.get_raw_row_index(display_row: int | Sequence[int]) -> int | list[int]`
-Translates one or multiple visual display row indexes to raw storage indexes.
+#### `.get_row_id(display_row: int | Sequence[int]) -> int | list[int]`
+Translates one or multiple visual display row indexes to their permanent, immutable row IDs (assigned at load/insert time).
 ```python
 # Pass a single visual row index:
-raw_row_index = table.get_raw_row_index(disp_row_index)  # e.g. disp_row_index = 5 --> raw_row_index = 42
+row_id = table.get_row_id(disp_row_index)  # e.g. disp_row_index = 0 --> row_id = 42
 
-# Or pass a list of visual row indexes:
-selected_rows = table.get_selected_rows()  # e.g. [5, 12]
-raw_row_indexes = table.get_raw_row_index(selected_rows)  # e.g. [42, 105]
+# Or pass a list of visual row indexes (e.g. from selection):
+selected_rows = table.get_selected_rows()  # e.g. [0, 1]
+row_ids = table.get_row_id(selected_rows)  # e.g. [42, 105]
 ```
 
-#### `.get_display_row_index(raw_row: int | Sequence[int]) -> int | list[int]`
-Translates one or multiple raw storage indexes to current visual display row indexes.
+#### `.get_display_row(row_id: int | Sequence[int]) -> int | list[int]`
+Translates one or multiple permanent row IDs to their current visual display row indexes on screen.
 ```python
-# Pass a single raw row index:
-disp_row_index = table.get_display_row_index(raw_row_index)
+# Pass a single row ID to locate where it sits right now:
+disp_row_index = table.get_display_row(42)
 table.select_row(disp_row_index)
 table.scroll_to(row=disp_row_index)
 
-# Or translate multiple raw row indexes at once:
-disp_row_indexes = table.get_display_row_index([42, 105])  # e.g. [0, 2]
+# Or translate multiple row IDs at once:
+disp_row_indexes = table.get_display_row([42, 105])  # e.g. [0, 2]
+```
+
+#### `.get_row_by_id(row_id: int) -> list[Any]`
+Returns a copy of the record values matching a specific permanent row ID, regardless of current visual sort or scroll position.
+```python
+record = table.get_row_by_id(42)  # Returns data for record 42 directly
 ```
 
 #### `.get_row(row_index: int) -> list[Any]`
-Returns a copy of the row record at the specified display index.
+Returns a copy of the row record at the specified visual display index.
 ```python
 record = table.get_row(0)  # e.g. [1, "Ada Lovelace", "Mathematician", "$120,000"]
 ```
@@ -317,17 +323,17 @@ table.sort_by(2, ascending=False)  # Sort column 2 descending (Z-A)
 ```
 
 #### `.clear_sort() -> None`
-Resets the table back to its baseline insertion order (as long as a sort was not permanently baked with `.commit_sort()`).
+Resets the table back to its baseline insertion order (as long as a sort was not frozen with `.freeze_sort()`).
 ```python
 table.clear_sort()
 ```
 
-#### `.commit_sort() -> None`
-Permanently bakes the current visual sorted order into the underlying raw dataset and resets the active sort state. Header sort arrows (▲ / ▼) are cleared, and this order becomes the new baseline dataset.
+#### `.freeze_sort() -> None`
+Freezes the current visual sorted order into the baseline dataset and resets the active sort state without altering any permanent `row_id` identities. Header sort arrows (▲ / ▼) are cleared, and inserting or editing cells will no longer trigger automatic re-sorting.
 ```python
 table.sort_by(1, ascending=True)  # Sort by column 1
-table.commit_sort()  # Lock this sorted order into raw data
-print(table.cget("values"))  # Baseline data is now permanently sorted
+table.freeze_sort()  # Freeze this visual layout as manual baseline
+print(table.cget("values"))  # Baseline data matches frozen visual order
 ```
 
 #### `.get_sort_state() -> tuple[int | None, bool]`

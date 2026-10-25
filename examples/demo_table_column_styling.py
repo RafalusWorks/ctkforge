@@ -25,6 +25,7 @@ app.title("CTkTable - Per-Column Styling & Column Visibility Demo")
 app.geometry("860x520")
 app.minsize(700, 380)
 
+
 # Sample tabular dataset
 headers = ["ID", "Employee Name", "Department", "Salary (£)", "Status"]
 values: list[list[Any]] = [
@@ -42,9 +43,6 @@ values: list[list[Any]] = [
     [112, "Edsger Dijkstra", "Formal Methods", "£139,000", "Active"],
 ]
 
-# Control toolbar for dynamic visibility toggling
-toolbar = ctk.CTkFrame(app, fg_color="transparent")
-toolbar.pack(fill="x", padx=20, pady=(15, 0))
 
 # Configure table with per-column styling using both header titles and column indices
 table = CTkTable(
@@ -90,8 +88,6 @@ table = CTkTable(
     editable={"default": True, "ID": False, "Employee Name": False, "Department": False},
 )
 
-table.pack(fill="both", expand=True, padx=20, pady=(10, 20))
-
 
 def toggle_dept_visibility() -> None:
     """Toggle visibility of the department column using header title."""
@@ -100,12 +96,16 @@ def toggle_dept_visibility() -> None:
 
 
 dept_switch = ctk.CTkSwitch(
-    toolbar,
+    app,
     text="Show Department",
     command=toggle_dept_visibility,
 )
 dept_switch.select()
-dept_switch.pack(side="left", padx=(0, 15))
+
+
+# pack the switch and the table
+dept_switch.pack(anchor="w", padx=20, pady=(15, 0))
+table.pack(fill="both", expand=True, padx=20, pady=(10, 20))
 
 
 def on_closing() -> None:

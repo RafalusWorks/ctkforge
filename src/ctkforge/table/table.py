@@ -555,15 +555,14 @@ class CTkTable(ctk.CTkFrame):
             old_val = ""
 
         if new_val != str(old_val):
-            old_val, storage_row = self._data_model.update_cell(visual_r, c, new_val)
+            old_val, row_id = self._data_model.update_cell(visual_r, c, new_val)
 
-            # Bake current visual order if editing the active sort column
+            # Freeze current visual order if editing the active sort column
             if self._data_model.sort_column == c:
-                self._data_model.commit_sort()
-                storage_row = visual_r
+                self._data_model.freeze_sort()
 
             if self.on_cell_edit is not None:
-                self.on_cell_edit(storage_row, c, old_val, new_val)
+                self.on_cell_edit(row_id, c, old_val, new_val)
 
         self._editor.destroy_editor()
         with suppress(tk.TclError):
@@ -882,36 +881,40 @@ class CTkTable(ctk.CTkFrame):
         return self._data_model.get_row(row_index)
 
     @overload
-    def get_raw_row_index(self, display_row: int) -> int:
-        """Translate a single visual display row index to its raw storage index."""
+    def get_row_id(self, display_row: int) -> int:
+        """Translate a single visual display row index to its permanent row ID."""
         ...
 
     @overload
-    def get_raw_row_index(self, display_row: Sequence[int]) -> list[int]:
-        """Translate multiple visual display row indexes to raw storage indexes."""
+    def get_row_id(self, display_row: Sequence[int]) -> list[int]:
+        """Translate multiple visual display row indexes to permanent row IDs."""
         ...
 
-    def get_raw_row_index(self, display_row: int | Sequence[int]) -> int | list[int]:
-        """Translate one or multiple visual display row indexes to raw storage indexes."""
+    def get_row_id(self, display_row: int | Sequence[int]) -> int | list[int]:
+        """Translate one or multiple visual display row indexes to permanent row IDs."""
         if isinstance(display_row, (list, tuple, set)):
-            return [self._data_model.get_raw_row_index(r) for r in display_row]
-        return self._data_model.get_raw_row_index(display_row)
+            return [self._data_model.get_row_id(r) for r in display_row]
+        return self._data_model.get_row_id(display_row)
 
     @overload
-    def get_display_row_index(self, raw_row: int) -> int:
-        """Translate a single raw row index to its current visual display index."""
+    def get_display_row(self, row_id: int) -> int:
+        """Translate a single permanent row ID to its current visual display index."""
         ...
 
     @overload
-    def get_display_row_index(self, raw_row: Sequence[int]) -> list[int]:
-        """Translate multiple raw row indexes to current visual display indexes."""
+    def get_display_row(self, row_id: Sequence[int]) -> list[int]:
+        """Translate multiple permanent row IDs to current visual display indexes."""
         ...
 
-    def get_display_row_index(self, raw_row: int | Sequence[int]) -> int | list[int]:
-        """Translate one or multiple raw row indexes to current visual display indexes."""
-        if isinstance(raw_row, (list, tuple, set)):
-            return [self._data_model.get_display_row_index(r) for r in raw_row]
-        return self._data_model.get_display_row_index(raw_row)
+    def get_display_row(self, row_id: int | Sequence[int]) -> int | list[int]:
+        """Translate one or multiple permanent row IDs to current visual display indexes."""
+        if isinstance(row_id, (list, tuple, set)):
+            return [self._data_model.get_display_row(r) for r in row_id]
+        return self._data_model.get_display_row(row_id)
+
+    def get_row_by_id(self, row_id: int) -> list[Any]:
+        """Return the record values matching a specific permanent row ID."""
+        return self._data_model.get_row_by_id(row_id)
 
     def get_cell(self, row_index: int, col_index: int) -> Any:
         """Return the cell value at display row and column."""
@@ -919,7 +922,7 @@ class CTkTable(ctk.CTkFrame):
 
     def update_cell(self, row_index: int, col_index: int, value: Any, notify: bool = True) -> None:
         """Update a specific cell value in-place, updating sorting if relevant."""
-        old_val, storage_row = self._data_model.update_cell(row_index, col_index, value)
+        old_val, row_id = self._data_model.update_cell(row_index, col_index, value)
 
         if self._data_model.sort_column == col_index:
             self.sort_by(col_index, ascending=self._data_model.sort_ascending)
@@ -927,7 +930,7 @@ class CTkTable(ctk.CTkFrame):
             self._redraw()
 
         if notify and self.on_cell_edit is not None:
-            self.on_cell_edit(storage_row, col_index, old_val, value)
+            self.on_cell_edit(row_id, col_index, old_val, value)
 
     def update_row(self, display_row: int, values: list[Any], notify: bool = True) -> None:
         """Update an entire row in-place, updating sorting if relevant."""
@@ -935,7 +938,7 @@ class CTkTable(ctk.CTkFrame):
             self._cancel_edit()
 
         total_cols = self._get_total_cols()
-        old_row, storage_row = self._data_model.update_row(display_row, values, total_cols=total_cols)
+        old_row, row_id = self._data_model.update_row(display_row, values, total_cols=total_cols)
 
         sort_col = self._data_model.sort_column
         if sort_col is not None and (
@@ -949,7 +952,7 @@ class CTkTable(ctk.CTkFrame):
             max_check = min(len(old_row), len(values))
             for c in range(max_check):
                 if old_row[c] != values[c]:
-                    self.on_cell_edit(storage_row, c, old_row[c], values[c])
+                    self.on_cell_edit(row_id, c, old_row[c], values[c])
 
     def get_header(self, col_index: int) -> str:
         """Return the header title for a specific column index."""
@@ -965,15 +968,14 @@ class CTkTable(ctk.CTkFrame):
         """Insert a row at display position index (or append if None). Return the new display index."""
         self._cancel_edit()
         total_cols = self._get_total_cols()
-        visual_insert_pos, _ = self._data_model.insert_row(index, values, total_cols)
+        visual_insert_pos, new_row_id = self._data_model.insert_row(index, values, total_cols)
 
         self._selection_manager.adjust_indexes_after_insert(visual_insert_pos)
 
         if self._data_model.sort_column is not None:
             self.sort_by(self._data_model.sort_column, ascending=self._data_model.sort_ascending)
             # Re-locate the newly inserted row's visual slot after re-sorting
-            storage_insert_pos = self._data_model.row_count - 1
-            visual_insert_pos = self._data_model.get_display_row_index(storage_insert_pos)
+            visual_insert_pos = self._data_model.get_display_row(new_row_id)
         else:
             self._redraw()
 
@@ -1013,10 +1015,10 @@ class CTkTable(ctk.CTkFrame):
         self._data_model.clear_sort()
         self._redraw()
 
-    def commit_sort(self) -> None:
-        """Permanently bake current visual sorted order into the raw dataset and reset sort state."""
+    def freeze_sort(self) -> None:
+        """Lock current visual sorted order into storage and reset sort state while preserving row IDs."""
         self._commit_edit()
-        self._data_model.commit_sort()
+        self._data_model.freeze_sort()
         self._redraw()
 
     def get_sort_state(self) -> tuple[int | None, bool]:

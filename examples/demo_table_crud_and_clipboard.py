@@ -20,7 +20,7 @@ from ctkforge import CTkTable
 
 # Application Metadata & Constants
 APPLICATION_NAME: Final[str] = "CTkTable"
-APPLICATION_VERSION: Final[str] = "0.5.0"
+APPLICATION_VERSION: Final[str] = "0.4.0"
 APPLICATION_TAGLINE: Final[str] = "Clipboard, Selection & CRUD (Phase 5)"
 APPLICATION_WINDOW_TITLE: Final[str] = f"{APPLICATION_NAME} v{APPLICATION_VERSION} - {APPLICATION_TAGLINE}"
 
@@ -372,17 +372,17 @@ class TableDemoApp(ctk.CTk):
             text_color="gray65",
         )
 
-    def _on_cell_edited(self, actual_row: int, col: int, old_val: Any, new_val: Any) -> None:
+    def _on_cell_edited(self, row_id: int, col: int, old_val: Any, new_val: Any) -> None:
         """Display real-time telemetry when a cell is edited."""
         col_name = TABLE_HEADERS[col] if col < len(TABLE_HEADERS) else f"Col {col}"
         self._status_label.configure(
-            text=f"Edited Record #{actual_row + 1} [{col_name}]: '{old_val}' -> '{new_val}' (Committed)",
+            text=f"Edited Record ID #{row_id + 1} [{col_name}]: '{old_val}' -> '{new_val}' (Committed)",
             text_color="#3b8ed0",
         )
         # Keep Total Amount (col 8) synchronized when Quantity (6) or Unit Price (7) changes
         if col in (6, 7):
             try:
-                disp_row = self._table.get_display_row_index(actual_row)
+                disp_row = self._table.get_display_row(row_id)
                 row_vals = self._table.get_row(disp_row)
                 qty = int(row_vals[6])
                 price = parse_currency(row_vals[7])

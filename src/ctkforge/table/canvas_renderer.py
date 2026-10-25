@@ -87,77 +87,99 @@ class TableRenderer:
         if header_w <= 1:
             header_w = canvas_width
 
-        header_font_obj = tkfont.Font(font=header_font)
-        radius = min(corner_radius, header_height, header_w // 2)
+        total_content_right = col_offsets[-1] - scroll_x if col_offsets else 0
+        content_right = max(0, min(header_w, int(total_content_right)))
+        if content_right <= 0:
+            return
 
-        if radius > 0 and header_w > 2 * radius:
-            canvas.create_arc(
-                0,
-                0,
-                2 * radius,
-                2 * radius,
-                start=HEADER_ARC_START_LEFT,
-                extent=HEADER_ARC_EXTENT,
-                fill=bg_hex,
-                outline="",
-            )
-            canvas.create_arc(
-                header_w - 2 * radius,
-                0,
-                header_w,
-                2 * radius,
-                start=HEADER_ARC_START_RIGHT,
-                extent=HEADER_ARC_EXTENT,
-                fill=bg_hex,
-                outline="",
-            )
-            canvas.create_rectangle(radius, 0, header_w - radius, header_height, fill=bg_hex, outline="")
-            canvas.create_rectangle(0, radius, header_w, header_height, fill=bg_hex, outline="")
+        header_font_obj = tkfont.Font(font=header_font)
+        radius = min(corner_radius, header_height, content_right // 2)
+
+        has_left_arc = radius > 0 and scroll_x == 0
+        has_right_arc = radius > 0
+
+        if has_left_arc or has_right_arc:
+            left_offset = radius if has_left_arc else 0
+            right_offset = radius if has_right_arc else 0
+
+            if has_left_arc:
+                canvas.create_arc(
+                    0,
+                    0,
+                    2 * radius,
+                    2 * radius,
+                    start=HEADER_ARC_START_LEFT,
+                    extent=HEADER_ARC_EXTENT,
+                    fill=bg_hex,
+                    outline="",
+                )
+            if has_right_arc:
+                canvas.create_arc(
+                    content_right - 2 * radius,
+                    0,
+                    content_right,
+                    2 * radius,
+                    start=HEADER_ARC_START_RIGHT,
+                    extent=HEADER_ARC_EXTENT,
+                    fill=bg_hex,
+                    outline="",
+                )
+            if content_right > left_offset + right_offset:
+                canvas.create_rectangle(
+                    left_offset, 0, content_right - right_offset, header_height, fill=bg_hex, outline=""
+                )
+            canvas.create_rectangle(0, radius, content_right, header_height, fill=bg_hex, outline="")
         else:
-            canvas.create_rectangle(0, 0, header_w, header_height, fill=bg_hex, outline="")
+            canvas.create_rectangle(0, 0, content_right, header_height, fill=bg_hex, outline="")
 
         # Draw hover background behind the active column if hovered
         total_cols = len(col_widths)
         if hovered_col is not None and header_hover_color_hex and 0 <= hovered_col < total_cols:
             h_left = col_offsets[hovered_col] - scroll_x
             h_right = col_offsets[hovered_col + 1] - scroll_x
-            if radius > 0 and hovered_col == 0 and h_left >= 0:
-                # Rounded top-left corner slice
-                canvas.create_arc(
-                    h_left,
-                    0,
-                    h_left + 2 * radius,
-                    2 * radius,
-                    start=HEADER_ARC_START_LEFT,
-                    extent=HEADER_ARC_EXTENT,
-                    fill=header_hover_color_hex,
-                    outline="",
-                )
-                canvas.create_rectangle(
-                    h_left + radius, 0, h_right, header_height, fill=header_hover_color_hex, outline=""
-                )
-                canvas.create_rectangle(h_left, radius, h_right, header_height, fill=header_hover_color_hex, outline="")
-            elif radius > 0 and hovered_col == total_cols - 1 and h_right <= header_w:
-                # Rounded top-right corner slice
-                canvas.create_arc(
-                    h_right - 2 * radius,
-                    0,
-                    h_right,
-                    2 * radius,
-                    start=HEADER_ARC_START_RIGHT,
-                    extent=HEADER_ARC_EXTENT,
-                    fill=header_hover_color_hex,
-                    outline="",
-                )
-                canvas.create_rectangle(
-                    h_left, 0, h_right - radius, header_height, fill=header_hover_color_hex, outline=""
-                )
+            is_first = hovered_col == 0 and has_left_arc
+            is_last = hovered_col == total_cols - 1 and has_right_arc
+
+            if is_first or is_last:
+                h_left_offset = radius if is_first else 0
+                h_right_offset = radius if is_last else 0
+                if is_first:
+                    canvas.create_arc(
+                        h_left,
+                        0,
+                        h_left + 2 * radius,
+                        2 * radius,
+                        start=HEADER_ARC_START_LEFT,
+                        extent=HEADER_ARC_EXTENT,
+                        fill=header_hover_color_hex,
+                        outline="",
+                    )
+                if is_last:
+                    canvas.create_arc(
+                        h_right - 2 * radius,
+                        0,
+                        h_right,
+                        2 * radius,
+                        start=HEADER_ARC_START_RIGHT,
+                        extent=HEADER_ARC_EXTENT,
+                        fill=header_hover_color_hex,
+                        outline="",
+                    )
+                if h_right > h_left + h_left_offset + h_right_offset:
+                    canvas.create_rectangle(
+                        h_left + h_left_offset,
+                        0,
+                        h_right - h_right_offset,
+                        header_height,
+                        fill=header_hover_color_hex,
+                        outline="",
+                    )
                 canvas.create_rectangle(h_left, radius, h_right, header_height, fill=header_hover_color_hex, outline="")
             else:
                 canvas.create_rectangle(h_left, 0, h_right, header_height, fill=header_hover_color_hex, outline="")
 
         # Bottom border line
-        canvas.create_line(0, header_height - 1, header_w, header_height - 1, fill=divider_color_hex)
+        canvas.create_line(0, header_height - 1, content_right, header_height - 1, fill=divider_color_hex)
 
         # Columns
         for v_col in range(start_col, end_col):
@@ -256,8 +278,8 @@ class TableRenderer:
             # Horizontal divider line
             canvas.create_line(0, y_bottom, canvas_width, y_bottom, fill=divider_color_hex)
 
-            raw_row = data_model.get_raw_row_index(r)
-            row_data = data_model.values[raw_row]
+            storage_row = data_model.get_storage_index(r)
+            row_data = data_model.values[storage_row]
             row_len = len(row_data)
 
             for v_col in range(start_col, min(end_col, num_visible)):
@@ -277,6 +299,8 @@ class TableRenderer:
 
                 if v_col > 0:
                     canvas.create_line(x_left, y_top, x_left, y_bottom, fill=divider_color_hex)
+                if v_col == num_visible - 1:
+                    canvas.create_line(x_right, y_top, x_right, y_bottom, fill=divider_color_hex)
 
                 # Prioritize selection color over custom column text color
                 if is_row_selected or is_cell_selected:
