@@ -206,6 +206,13 @@ def run_table_test_suite(table: CTkTable, root: ctk.CTk) -> None:
     print("[14/25] Delete Row: PASSED", flush=True)
 
     # 15. Auto-Fit Column & Dynamic Style Configuration
+    assert table.get_displayed_header(1) == table.get_header(1), "Unsorted header should match base title"
+    table.sort_by(1, ascending=True)
+    assert "▲" in table.get_displayed_header(1), "Sorted header should display up arrow"
+    table.sort_by(1, ascending=False)
+    assert "▼" in table.get_displayed_header(1), "Descending header should display down arrow"
+    table.clear_sort()
+
     table.auto_fit_column(1)
     step()
     assert table._layout_mgr.column_widths is not None, "Column widths should be computed"

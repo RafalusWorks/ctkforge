@@ -27,7 +27,7 @@ app.minsize(700, 380)
 
 
 # Sample tabular dataset
-headers = ["ID", "Employee Name", "Department", "Salary (£)", "Status"]
+headers = ["ID Row Index", "Employee Name", "Department", "Salary (£)", "Status"]
 values: list[list[Any]] = [
     [101, "Ada Lovelace", "Research", "£125,000", "Active"],
     [102, "Alan Turing", "Data Systems", "£135,000", "Active"],
@@ -49,11 +49,11 @@ table = CTkTable(
     app,
     headers=headers,
     values=values,
-    column_widths={"default": "auto", "ID": 70, "Employee Name": 180, 2: 170, "Salary (£)": 130},
-    sort_key={"ID": "int", "Salary (£)": "str"},
+    column_widths={"default": "auto", "ID Row Index": 70, "Employee Name": 180, 2: 170, "Salary (£)": 130},
+    sort_key={"ID Row Index": "int", "Salary (£)": "str"},
     justify={
         "default": "left",
-        "ID": "center",
+        "ID Row Index": "center",
         "Salary (£)": "right",
         "Status": "center",
     },
@@ -66,7 +66,7 @@ table = CTkTable(
     },
     header_alignment={
         "default": "left",
-        "ID": "center",
+        "ID Row Index": "center",
         "Salary (£)": "right",
         "Status": "center",
     },
@@ -85,7 +85,7 @@ table = CTkTable(
     border_width=1,
     selection_target="row",
     selection_mode="single",
-    editable={"default": True, "ID": False, "Employee Name": False, "Department": False},
+    editable={"default": True, "ID Row Index": False, "Employee Name": False, "Department": False},
 )
 
 

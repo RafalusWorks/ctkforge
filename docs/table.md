@@ -214,6 +214,18 @@ Returns the title text for the specified column header.
 title = table.get_header(1)  # e.g. "Name"
 ```
 
+#### `.get_displayed_header(col_index: int | str) -> str`
+Returns the full header title currently displayed on screen, including any active sort arrow (`▲` or `▼`).
+```python
+displayed = table.get_displayed_header(1)  # e.g. "Name ▲" or "Name"
+```
+
+#### `.is_column_sortable(col_index: int | str) -> bool`
+Returns whether clicking the given column header is allowed to sort the table.
+```python
+can_sort = table.is_column_sortable(1)  # True or False
+```
+
 #### `.set_header(col_index: int, title: str) -> None`
 Updates the title for a specific column header without re-supplying the entire list.
 ```python

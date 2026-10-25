@@ -40,6 +40,7 @@ class ColumnLayoutManager:
         resolve_col_index: Callable[[int | str], int | None],
         create_text_measure_lookup: Callable[[], TextMeasureLookup],
         on_layout_changed: Callable[[], None],
+        is_column_sortable: Callable[[int], bool] | None = None,
     ) -> None:
         """Wire the manager to the table through plain callbacks.
 
@@ -65,6 +66,7 @@ class ColumnLayoutManager:
         self._resolve_col_index = resolve_col_index
         self._create_text_measure_lookup = create_text_measure_lookup
         self._on_layout_changed = on_layout_changed
+        self._is_column_sortable = is_column_sortable
 
         self._column_widths: Any = column_widths
 
@@ -239,10 +241,19 @@ class ColumnLayoutManager:
         self._ensure_explicit_widths()
 
         for col_index in target_cols:
-            header_text = headers[col_index] if (headers and col_index < len(headers)) else None
+            base_header = headers[col_index] if (headers and col_index < len(headers)) else None
             header_measure, body_measure = measure_lookup(col_index)
+
+            # Reserve room for sort indicator if the column is currently sorted or can be sorted
+            is_sorted = self._data_model.sort_column == col_index
+            is_sortable = self._is_column_sortable(col_index) if self._is_column_sortable is not None else True
+            if base_header and (is_sorted or is_sortable):
+                test_header = f"{base_header} ▲"
+            else:
+                test_header = base_header
+
             fitted_width = ColumnResizer.calculate_autofit_width(
-                header_text=header_text,
+                header_text=test_header,
                 sample_values=self._sample_column_text(col_index, sample_rows),
                 header_measure=header_measure,
                 body_measure=body_measure,

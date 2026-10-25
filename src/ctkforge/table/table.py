@@ -189,6 +189,7 @@ class CTkTable(ctk.CTkFrame):
             resolve_col_index=self._style.resolve_col_index,
             create_text_measure_lookup=self._style.create_text_measure_lookup,
             on_layout_changed=self._redraw,
+            is_column_sortable=lambda c: self.is_column_sortable(c),
         )
 
         # Editing rules
@@ -963,6 +964,27 @@ class CTkTable(ctk.CTkFrame):
     def set_header(self, col_index: int, title: str) -> None:
         """Set or update the title for a specific column header."""
         self.configure(headers={col_index: title})
+
+    def get_displayed_header(self, col_index: int | str) -> str:
+        """Return the full header title currently displayed on screen, including any active sort arrow."""
+        c = self._style.resolve_col_index(col_index)
+        if c is None:
+            return ""
+        base_title = self.get_header(c)
+        if not base_title:
+            return ""
+        sort_col, is_asc = self.get_sort_state()
+        if sort_col == c:
+            glyph = "▲" if is_asc else "▼"
+            return f"{base_title} {glyph}"
+        return base_title
+
+    def is_column_sortable(self, col_index: int | str) -> bool:
+        """Return whether clicking the given column header is allowed to sort the table."""
+        c = self._style.resolve_col_index(col_index)
+        if c is None or not hasattr(self, "_header_controller"):
+            return True
+        return self._header_controller.is_column_sortable(c)
 
     def insert_row(self, index: int | None = None, values: list[Any] | None = None) -> int:
         """Insert a row at display position index (or append if None). Return the new display index."""
