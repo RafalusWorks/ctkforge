@@ -2,6 +2,8 @@
 
 A modern, DPI-aware modal dialog and alert popup library for CustomTkinter.
 
+> For technical signatures, default values, and parameter types, see the [CTkPopup API Reference](popup.md).
+
 ---
 
 ## Table of Contents
