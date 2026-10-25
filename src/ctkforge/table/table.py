@@ -965,8 +965,12 @@ class CTkTable(ctk.CTkFrame):
         """Set or update the title for a specific column header."""
         self.configure(headers={col_index: title})
 
+    # Keep undocumented in public API guides
     def get_displayed_header(self, col_index: int | str) -> str:
-        """Return the full header title currently displayed on screen, including any active sort arrow."""
+        """Return the full header title currently displayed on screen, including any active sort arrow.
+
+        Internal / Undocumented: Omit from public documentation and user guides.
+        """
         c = self._style.resolve_col_index(col_index)
         if c is None:
             return ""
