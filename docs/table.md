@@ -412,6 +412,9 @@ table.bind("<F2>", lambda _e: table.edit_focused_cell())
 
 ## 4. Read-Only Properties
 
+#### `.is_editing -> bool`
+Returns `True` if an in-place cell editor is currently active and open on screen (i.e. a user is actively typing in a cell), or `False` if no cell is being edited.
 ```python
-is_editing = table.is_editing
+if table.is_editing:
+    print("User is currently editing a cell")
 ```
