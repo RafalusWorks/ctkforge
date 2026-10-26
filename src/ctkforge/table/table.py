@@ -774,6 +774,7 @@ class CTkTable(ctk.CTkFrame):
             col_fonts=self._style.column_fonts,
             col_font_objs=self._style.column_font_objs,
             visible_cols=visible_cols,
+            resolve_color=self._style.resolve_color,
         )
 
         # Synchronize scrollbars
@@ -920,6 +921,34 @@ class CTkTable(ctk.CTkFrame):
     def get_cell(self, row_index: int, col_index: int) -> Any:
         """Return the cell value at display row and column."""
         return self._data_model.get_cell(row_index, col_index)
+
+    def get_cell_text_color(self, row_index: int, col_index: int | str) -> str | tuple[str, str] | None:
+        """Return the custom text color assigned to a cell at display row and column."""
+        c = self._style.resolve_col_index(col_index)
+        if c is None:
+            raise IndexError(f"Column '{col_index}' not found")
+        return self._data_model.get_cell_text_color(row_index, c)
+
+    def set_cell_text_color(
+        self,
+        row_index: int,
+        col_index: int | str,
+        color: str | tuple[str, str] | None,
+        redraw: bool = True,
+    ) -> None:
+        """Assign or remove a custom text color for a specific cell at display row and column."""
+        c = self._style.resolve_col_index(col_index)
+        if c is None:
+            raise IndexError(f"Column '{col_index}' not found")
+        self._data_model.set_cell_text_color(row_index, c, color)
+        if redraw:
+            self._redraw()
+
+    def clear_cell_text_colors(self, redraw: bool = True) -> None:
+        """Remove all custom cell text colors."""
+        self._data_model.clear_cell_text_colors()
+        if redraw:
+            self._redraw()
 
     def update_cell(self, row_index: int, col_index: int, value: Any, notify: bool = True) -> None:
         """Update a specific cell value in-place, updating sorting if relevant."""

@@ -18,7 +18,7 @@ pip install ctkforge
 
 | Component | Description | Documentation |
 | :--- | :--- | :--- |
-| [**CTkTable**](docs/table.md) | High-performance data table with smart sorting, row/cell selection, cell editing, and clipboard support. | [API Reference](docs/table.md) • [User Guide](docs/table_user_guide.md) |
+| [**CTkTable**](docs/table.md) | High-performance data table with smart sorting, row/cell selection, cell editing, and clipboard support. | [API Reference](docs/table.md) • [User Guide](docs/table_user_guide.md) • [AI Guide](docs/ctktable_ai_guide.md) |
 | [**CTkPopup**](docs/popup.md) | Modern modal dialogs for alerts, confirmations, and errors with auto-scrolling and keyboard shortcuts. | [API Reference](docs/popup.md) • [User Guide](docs/popup_user_guide.md) |
 | [**CTkSpinbox**](docs/spinbox.md) | Numeric input widget with classic arrow steppers, mouse wheel control, limits, and custom steps. | [API Reference](docs/spinbox.md) |
 | [**Utilities**](docs/utilities.md) | High-DPI screen coordinate unscaling (`unscale`) and PyInstaller asset path resolution (`resource_path`). | [Utilities Reference](docs/utilities.md) |

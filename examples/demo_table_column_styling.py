@@ -5,6 +5,7 @@ Demonstrates:
   - Custom fonts and colors per column (e.g. bold green currency values).
   - Independent alignment for body columns and header titles.
   - Dynamic column visibility toggling (show_columns).
+  - Individual cell text color overrides and dynamic toggle (Status highlights: Inactive/Probation in red, On Leave in orange).
   - Header hover highlights on sortable columns.
 
 Author: Rafalus
@@ -88,6 +89,33 @@ table = CTkTable(
     editable={"default": True, "ID Row Index": False, "Employee Name": False, "Department": False},
 )
 
+# Status cell highlight color palette
+status_colors: dict[str, tuple[str, str]] = {
+    "Inactive": ("#c0392b", "#e74c3c"),
+    "Probation": ("#c0392b", "#e74c3c"),
+    "On Leave": ("#d35400", "#e67e22"),
+}
+
+
+def apply_status_highlights() -> None:
+    """Apply individual cell text colors to highlight non-active employee statuses and names."""
+    total_rows = len(table.get())
+    for row_idx in range(total_rows):
+        status_val = str(table.get_cell(row_idx, 4))
+        if status_val in status_colors:
+            color = status_colors[status_val]
+            table.set_cell_text_color(row_idx, "Status", color, redraw=False)
+            table.set_cell_text_color(row_idx, "Employee Name", color, redraw=False)
+    table._redraw()
+
+
+def toggle_status_highlights() -> None:
+    """Toggle individual cell text coloring on or off for the Status column."""
+    if status_switch.get() == 1:
+        apply_status_highlights()
+    else:
+        table.clear_cell_text_colors()
+
 
 def toggle_dept_visibility() -> None:
     """Toggle visibility of the department column using header title."""
@@ -95,16 +123,28 @@ def toggle_dept_visibility() -> None:
     table.configure(show_columns={"Department": is_visible})
 
 
+# Top control switches
+controls_frame = ctk.CTkFrame(app, fg_color="transparent")
+controls_frame.pack(anchor="w", padx=20, pady=(15, 0), fill="x")
+
 dept_switch = ctk.CTkSwitch(
-    app,
+    controls_frame,
     text="Show Department",
     command=toggle_dept_visibility,
 )
+dept_switch.pack(side="left", padx=(0, 20))
 dept_switch.select()
 
+status_switch = ctk.CTkSwitch(
+    controls_frame,
+    text="Highlight Status ('Lazy Ones')",
+    command=toggle_status_highlights,
+)
+status_switch.pack(side="left")
+status_switch.select()
 
-# pack the switch and the table
-dept_switch.pack(anchor="w", padx=20, pady=(15, 0))
+# Apply initial highlights and pack table
+apply_status_highlights()
 table.pack(fill="both", expand=True, padx=20, pady=(10, 20))
 
 

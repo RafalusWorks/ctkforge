@@ -367,6 +367,7 @@ table = CTkTable(
 * **Trigger**: Double-click any cell or press **`Enter`** on a focused cell.
 * **Commit**: Press **`Enter`** or click outside the cell (`FocusOut`).
 * **Cancel**: Press **`Escape`** to discard changes.
+* **Sort Safety**: Committing an edit to a cell in the actively sorted column automatically freezes the sort (`freeze_sort()`), clearing the header arrow so the row remains in place.
 
 #### Commit Callback (`on_cell_edit`)
 Hook into edit commits to trigger database syncs or validations:

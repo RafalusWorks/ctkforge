@@ -2,7 +2,8 @@
 
 A fast, modern data table widget for CustomTkinter with built-in sorting, selection, and in-place cell editing.
 
-> For practical recipes and usage walkthroughs, see the [CTkTable User Guide](table_user_guide.md).
+> For practical recipes and usage walkthroughs, see the [CTkTable User Guide](table_user_guide.md).  
+
 
 ![CTkTable Preview](assets/table_preview.jpg)
 
@@ -202,6 +203,35 @@ Updates a cell value in-place. If the table is actively sorted by `col_index`, t
 table.update_cell(0, 3, "$140,000")
 ```
 
+#### `.set_cell_text_color(row_index: int, col_index: int | str, color: str | tuple[str, str] | None, redraw: bool = True) -> None`
+Assigns or removes an individual text color for a specific cell at display row and column (by index or header title).
+- Supports plain hex/color strings or CustomTkinter `(light_mode, dark_mode)` appearance tuples.
+- Pass `color=None` to revert the cell back to the column or table default text color.
+- Custom cell text colors persist across column sorting and data reordering.
+- When a row or cell is selected, selection text color takes precedence for legibility.
+```python
+# Set custom text color using column index or header title:
+table.set_cell_text_color(0, "Status", "#e74c3c")
+
+# Set theme-aware light/dark color tuple:
+table.set_cell_text_color(1, 4, ("#c0392b", "#e74c3c"))
+
+# Reset back to default:
+table.set_cell_text_color(0, "Status", None)
+```
+
+#### `.get_cell_text_color(row_index: int, col_index: int | str) -> str | tuple[str, str] | None`
+Returns the custom text color assigned to a specific cell, or `None` if the cell uses the default column/table text color.
+```python
+color = table.get_cell_text_color(0, "Status")
+```
+
+#### `.clear_cell_text_colors(redraw: bool = True) -> None`
+Removes all custom cell text colors across the entire table in a single operation.
+```python
+table.clear_cell_text_colors()
+```
+
 #### `.update_row(display_row: int, values: list[Any], notify: bool = True) -> None`
 Atomically updates an entire row record in-place. If the table is actively sorted by one of the modified columns, the sort order refreshes automatically.
 ```python
@@ -378,6 +408,9 @@ table.auto_fit_columns([0, 1, "Salary"])  # Fit specific subset of columns
 ---
 
 ### Cell Editing Methods
+
+> [!NOTE]
+> Committing an edit to a cell in the actively sorted column automatically freezes the sort (`freeze_sort()`), clearing the header arrow so the row remains in place.
 
 #### `.start_editing(row: int, col: int) -> None`
 Programmatically mounts the floating `CTkEntry` editor over the target cell.

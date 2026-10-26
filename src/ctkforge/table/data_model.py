@@ -29,6 +29,7 @@ class TableDataModel:
         self._row_ids: list[int] = list(range(len(self._values)))
         self._next_row_id: int = len(self._values)
         self._row_indexes: list[int] = list(range(len(self._values)))
+        self._cell_text_colors: dict[int, dict[int, Any]] = {}
         self._sort_key_default: SortKey = "str"
         self._sort_key_cols: dict[int, SortKey] = {}
         self.set_sort_key_rules(sort_key)
@@ -103,6 +104,7 @@ class TableDataModel:
         self._row_ids = list(range(len(self._values)))
         self._next_row_id = len(self._values)
         self._row_indexes = list(range(len(self._values)))
+        self._cell_text_colors.clear()
         self._sort_col = None
         self._sort_ascending = True
 
@@ -164,6 +166,35 @@ class TableDataModel:
         old_value = row_data[col_index]
         row_data[col_index] = value
         return old_value, self._row_ids[storage_idx]
+
+    def get_cell_text_color(self, display_row: int, col_index: int) -> Any | None:
+        """Return the custom text color assigned to a cell at display_row and col_index."""
+        storage_idx = self.get_storage_index(display_row)
+        row_id = self._row_ids[storage_idx]
+        return self._cell_text_colors.get(row_id, {}).get(col_index)
+
+    def set_cell_text_color(self, display_row: int, col_index: int, color: Any | None) -> None:
+        """Assign or remove a custom text color for a cell at display_row and col_index."""
+        storage_idx = self.get_storage_index(display_row)
+        row_id = self._row_ids[storage_idx]
+
+        if color is None:
+            if row_id in self._cell_text_colors:
+                self._cell_text_colors[row_id].pop(col_index, None)
+                if not self._cell_text_colors[row_id]:
+                    del self._cell_text_colors[row_id]
+        else:
+            if row_id not in self._cell_text_colors:
+                self._cell_text_colors[row_id] = {}
+            self._cell_text_colors[row_id][col_index] = color
+
+    def get_cell_text_colors_for_row_id(self, row_id: int) -> dict[int, Any] | None:
+        """Return all custom cell text colors mapped for a specific permanent row ID."""
+        return self._cell_text_colors.get(row_id)
+
+    def clear_cell_text_colors(self) -> None:
+        """Remove all custom cell text colors."""
+        self._cell_text_colors.clear()
 
     def update_row(self, display_row: int, values: list[Any], total_cols: int | None = None) -> tuple[list[Any], int]:
         """Update an entire row in storage at display_row.
@@ -237,6 +268,9 @@ class TableDataModel:
             return set()
 
         storage_to_delete = {self._row_indexes[idx] for idx in valid_targets}
+        deleted_row_ids = {self._row_ids[old_idx] for old_idx in storage_to_delete}
+        for r_id in deleted_row_ids:
+            self._cell_text_colors.pop(r_id, None)
 
         kept_values: list[list[Any]] = []
         kept_row_ids: list[int] = []

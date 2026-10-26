@@ -1136,6 +1136,93 @@ def test_style_reconfigure_theme_defaults_and_appearance_mode() -> None:
         root.destroy()
 
 
+def test_individual_cell_text_colors() -> None:
+    """Test assigning, reading, sorting, and clearing individual cell text colors."""
+    root = ctk.CTk()
+    root.withdraw()
+
+    headers = ["ID", "Name", "Status"]
+    values = [
+        [101, "Alice", "Active"],
+        [102, "Bob", "Probation"],
+        [103, "Charlie", "Inactive"],
+    ]
+
+    table = CTkTable(root, headers=headers, values=values)
+    root.update()
+
+    try:
+        # Initial state should have no custom cell colors
+        assert table.get_cell_text_color(0, 2) is None
+        assert table.get_cell_text_color(1, "Status") is None
+
+        # Set colors by index and header string
+        table.set_cell_text_color(1, "Status", "#e74c3c")
+        table.set_cell_text_color(2, 2, ("#c0392b", "#e74c3c"))
+        root.update()
+
+        assert table.get_cell_text_color(1, 2) == "#e74c3c"
+        assert table.get_cell_text_color(2, "Status") == ("#c0392b", "#e74c3c")
+
+        # Invalid column title raises IndexError
+        try:
+            table.set_cell_text_color(0, "NonExistent", "red")
+            assert False, "Should have raised IndexError"
+        except IndexError:
+            pass
+
+        # Sort descending by Name: Charlie (disp 0), Bob (disp 1), Alice (disp 2)
+        table.sort_by(1, ascending=False)
+        root.update()
+
+        # Bob is now visual row 1, Charlie is visual row 0, Alice is visual row 2
+        assert table.get_cell(0, 1) == "Charlie"
+        assert table.get_cell(1, 1) == "Bob"
+        assert table.get_cell(2, 1) == "Alice"
+
+        # Charlie had ("#c0392b", "#e74c3c") and Bob had "#e74c3c"
+        assert table.get_cell_text_color(0, "Status") == ("#c0392b", "#e74c3c")
+        assert table.get_cell_text_color(1, "Status") == "#e74c3c"
+        assert table.get_cell_text_color(2, "Status") is None
+
+        # Freeze sort preserves colors
+        table.freeze_sort()
+        root.update()
+        assert table.get_cell_text_color(0, "Status") == ("#c0392b", "#e74c3c")
+        assert table.get_cell_text_color(1, "Status") == "#e74c3c"
+
+        # Clearing a single cell's color
+        table.set_cell_text_color(1, "Status", None)
+        root.update()
+        assert table.get_cell_text_color(1, "Status") is None
+        assert table.get_cell_text_color(0, "Status") == ("#c0392b", "#e74c3c")
+
+        # Clear all cell colors
+        table.clear_cell_text_colors()
+        root.update()
+        assert table.get_cell_text_color(0, "Status") is None
+
+        # Setting and deleting a row removes color from memory
+        table.set_cell_text_color(0, "Status", "red")
+        row_id_0 = table.get_row_id(0)
+        assert isinstance(row_id_0, int)
+        assert row_id_0 in table._data_model._cell_text_colors
+        table.delete_rows(0)
+        root.update()
+        assert row_id_0 not in table._data_model._cell_text_colors
+
+        # Resetting values clears all colors
+        table.set_cell_text_color(0, "Status", "orange")
+        table.configure(values=[[1, "Test", "Active"]])
+        root.update()
+        assert len(table._data_model._cell_text_colors) == 0
+
+        print("test_individual_cell_text_colors: PASSED", flush=True)
+    finally:
+        table.destroy()
+        root.destroy()
+
+
 if __name__ == "__main__":
     run_headless_tests()
     test_theme_color_pair_not_unpacked_as_columns()
@@ -1150,3 +1237,4 @@ if __name__ == "__main__":
     test_divider_drag_resizes_column_left_of_divider()
     test_scroll_wheel_scrollbars_and_clamping()
     test_style_reconfigure_theme_defaults_and_appearance_mode()
+    test_individual_cell_text_colors()

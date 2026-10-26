@@ -7,6 +7,7 @@ are too narrow.
 
 import tkinter as tk
 import tkinter.font as tkfont
+from collections.abc import Callable
 from typing import Any
 
 import customtkinter as ctk
@@ -256,6 +257,7 @@ class TableRenderer:
         col_fonts: dict[int, Any] | None = None,
         col_font_objs: dict[int, tkfont.Font] | None = None,
         visible_cols: list[int] | None = None,
+        resolve_color: Callable[[Any], str] | None = None,
     ) -> None:
         """Render rows and cells within the visible viewport."""
         canvas.delete("all")
@@ -281,6 +283,8 @@ class TableRenderer:
             storage_row = data_model.get_storage_index(r)
             row_data = data_model.values[storage_row]
             row_len = len(row_data)
+            row_id = data_model.get_row_id(r)
+            cell_colors = data_model.get_cell_text_colors_for_row_id(row_id)
 
             for v_col in range(start_col, min(end_col, num_visible)):
                 c = visible_cols[v_col] if visible_cols is not None else v_col
@@ -302,9 +306,13 @@ class TableRenderer:
                 if v_col == num_visible - 1:
                     canvas.create_line(x_right, y_top, x_right, y_bottom, fill=divider_color_hex)
 
-                # Prioritize selection color over custom column text color
+                # Prioritize selection color over custom cell and column text color
                 if is_row_selected or is_cell_selected:
                     current_text_color = selected_text_hex
+                elif cell_colors and c in cell_colors:
+                    current_text_color = (
+                        resolve_color(cell_colors[c]) if resolve_color is not None else str(cell_colors[c])
+                    )
                 elif col_text_colors and c in col_text_colors:
                     current_text_color = col_text_colors[c]
                 else:
