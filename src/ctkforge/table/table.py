@@ -50,6 +50,7 @@ _REDRAW_OPTIONS: Final[frozenset[str]] = frozenset(
         "header_height",
         "border_spacing",
         "sort_key",
+        "formatters",
     }
 )
 
@@ -111,6 +112,8 @@ class CTkTable(ctk.CTkFrame):
         # In-Place Cell Editing
         editable: bool | dict[int | str, bool] = False,
         on_cell_edit: Callable[[int, int, Any, Any], None] | None = None,
+        # Cell Presentation & Formatting
+        formatters: Callable[[Any], Any] | dict[int | str, Callable[[Any], Any]] | None = None,
         **kwargs: Any,
     ) -> None:
         """Create a virtualized data table widget with headers, scrolling, selection, and cell editing."""
@@ -176,6 +179,12 @@ class CTkTable(ctk.CTkFrame):
             sort_key=self._normalize_sort_key_for_model(sort_key),
         )
 
+        # Value formatting rules
+        self._raw_formatters = formatters
+        self._formatter_default: Callable[[Any], Any] | None = None
+        self._formatter_cols: dict[int, Callable[[Any], Any]] = {}
+        self._set_formatter_rules(formatters)
+
         # Column visibility, widths, geometry, and auto-fit
         self._layout_mgr = ColumnLayoutManager(
             self,
@@ -190,6 +199,7 @@ class CTkTable(ctk.CTkFrame):
             create_text_measure_lookup=self._style.create_text_measure_lookup,
             on_layout_changed=self._redraw,
             is_column_sortable=lambda c: self.is_column_sortable(c),
+            format_cell=self._format_cell,
         )
 
         # Editing rules
@@ -342,6 +352,7 @@ class CTkTable(ctk.CTkFrame):
     def _re_normalize_scoped_attributes(self) -> None:
         """Re-normalize active scoped attribute dictionaries whenever headers change."""
         self._layout_mgr.reapply_show_columns_rules()
+        self._set_formatter_rules(self._raw_formatters)
         self._set_editable_rules(self._raw_editable)
         self._header_controller.reapply_sortable_rules()
         self._style.update_colors()
@@ -469,6 +480,38 @@ class CTkTable(ctk.CTkFrame):
     # In-Place Editing Lifecycle
     # -------------------------------------------------------------------------
 
+    def _set_formatter_rules(
+        self,
+        formatters: Callable[[Any], Any] | dict[int | str, Callable[[Any], Any]] | None,
+    ) -> None:
+        """Update column formatters, mapping header titles to logical column indexes."""
+        self._raw_formatters = formatters
+        if callable(formatters):
+            self._formatter_default = formatters
+            self._formatter_cols.clear()
+        elif isinstance(formatters, dict):
+            default_val, resolved = self._style.normalize_scoped_dict(formatters)
+            self._formatter_default = default_val if callable(default_val) else None
+            self._formatter_cols = {k: v for k, v in resolved.items() if callable(v)}
+        else:
+            self._formatter_default = None
+            self._formatter_cols.clear()
+
+    def _has_formatter(self, col: int) -> bool:
+        """Return whether a column has a custom formatter assigned."""
+        return col in self._formatter_cols or self._formatter_default is not None
+
+    def _format_cell(self, col: int, value: Any) -> str:
+        """Transform a raw cell value using the column's formatter, falling back to str()."""
+        formatter = self._formatter_cols.get(col, self._formatter_default)
+        if formatter is not None:
+            try:
+                res = formatter(value)
+                return "" if res is None else str(res)
+            except Exception:
+                return str(value)
+        return str(value)
+
     def _set_editable_rules(self, editable: bool | dict[int | str, bool]) -> None:
         """Update editable state, preserving baseline when 'default' is omitted in incremental dict reconfigures."""
         self._raw_editable = editable
@@ -484,14 +527,17 @@ class CTkTable(ctk.CTkFrame):
 
     def _has_editable_cells(self) -> bool:
         """Check whether at least one column permits cell editing."""
-        if self._editable_default:
-            return True
-        return any(self._editable_cols.values())
+        total_cols = self._get_total_cols()
+        if total_cols == 0:
+            return self._editable_default
+        return any(self._is_column_editable(c) for c in range(total_cols))
 
     def _is_column_editable(self, col: int) -> bool:
         """Check whether users are allowed to edit cells in this column."""
         if col in self._editable_cols:
             return self._editable_cols[col]
+        if self._has_formatter(col):
+            return False
         return self._editable_default
 
     def _start_editing(self, visual_row: int, col: int) -> None:
@@ -775,6 +821,7 @@ class CTkTable(ctk.CTkFrame):
             col_font_objs=self._style.column_font_objs,
             visible_cols=visible_cols,
             resolve_color=self._style.resolve_color,
+            format_cell=self._format_cell,
         )
 
         # Synchronize scrollbars
@@ -855,7 +902,7 @@ class CTkTable(ctk.CTkFrame):
 
     def copy_selection(self) -> str:
         """Copy selected rows or cells to the system clipboard as TSV."""
-        tsv_data = self._selection_manager.export_tsv(self._data_model)
+        tsv_data = self._selection_manager.export_tsv(self._data_model, format_cell=self._format_cell)
         if tsv_data:
             with suppress(tk.TclError):
                 root = self.winfo_toplevel()
@@ -863,7 +910,7 @@ class CTkTable(ctk.CTkFrame):
                 root.clipboard_append(tsv_data)
         return tsv_data
 
-    def get(self, row: int | None = None, column: int | None = None) -> Any:
+    def get(self, row: int | None = None, column: int | str | None = None) -> Any:
         """Return table data in current visual display order."""
         if row is not None:
             if column is not None:
@@ -871,10 +918,13 @@ class CTkTable(ctk.CTkFrame):
             return self.get_row(row)
 
         if column is not None:
+            c = self._style.resolve_col_index(column)
+            if c is None:
+                raise IndexError(f"Column '{column}' not found")
             total_cols = self._get_total_cols()
-            if not (0 <= column < total_cols):
+            if not (0 <= c < total_cols):
                 raise IndexError(f"Column index {column} out of range [0, {total_cols})")
-            return [self._data_model.get_cell(r, column) for r in range(self._data_model.row_count)]
+            return [self._data_model.get_cell(r, c) for r in range(self._data_model.row_count)]
 
         return self._data_model.get_all_rows()
 
@@ -918,9 +968,12 @@ class CTkTable(ctk.CTkFrame):
         """Return the record values matching a specific permanent row ID."""
         return self._data_model.get_row_by_id(row_id)
 
-    def get_cell(self, row_index: int, col_index: int) -> Any:
+    def get_cell(self, row_index: int, col_index: int | str) -> Any:
         """Return the cell value at display row and column."""
-        return self._data_model.get_cell(row_index, col_index)
+        c = self._style.resolve_col_index(col_index)
+        if c is None:
+            raise IndexError(f"Column '{col_index}' not found")
+        return self._data_model.get_cell(row_index, c)
 
     def get_cell_text_color(self, row_index: int, col_index: int | str) -> str | tuple[str, str] | None:
         """Return the custom text color assigned to a cell at display row and column."""
@@ -950,17 +1003,62 @@ class CTkTable(ctk.CTkFrame):
         if redraw:
             self._redraw()
 
-    def update_cell(self, row_index: int, col_index: int, value: Any, notify: bool = True) -> None:
-        """Update a specific cell value in-place, updating sorting if relevant."""
-        old_val, row_id = self._data_model.update_cell(row_index, col_index, value)
+    def get_formatted_cell(self, row_index: int, col_index: int | str) -> str:
+        """Return the formatted display text of a cell at display row and column."""
+        c = self._style.resolve_col_index(col_index)
+        if c is None:
+            raise IndexError(f"Column '{col_index}' not found")
+        val = self._data_model.get_cell(row_index, c)
+        return self._format_cell(c, val)
 
-        if self._data_model.sort_column == col_index:
-            self.sort_by(col_index, ascending=self._data_model.sort_ascending)
+    def get_column_formatter(self, column: int | str) -> Callable[[Any], Any] | None:
+        """Return the custom formatter function assigned to a column."""
+        c = self._style.resolve_col_index(column)
+        if c is None:
+            raise IndexError(f"Column '{column}' not found")
+        return self._formatter_cols.get(c, self._formatter_default)
+
+    def set_column_formatter(
+        self,
+        column: int | str,
+        formatter: Callable[[Any], Any] | None,
+        redraw: bool = True,
+    ) -> None:
+        """Assign or remove a custom display formatter for a specific column."""
+        c = self._style.resolve_col_index(column)
+        if c is None:
+            raise IndexError(f"Column '{column}' not found")
+        if formatter is None:
+            self._formatter_cols.pop(c, None)
+        else:
+            self._formatter_cols[c] = formatter
+        if not self._is_column_editable(c) and self.is_editing:
+            self._cancel_edit()
+        if redraw:
+            self._redraw()
+
+    def clear_column_formatters(self, redraw: bool = True) -> None:
+        """Remove all custom column formatters."""
+        self._raw_formatters = None
+        self._formatter_default = None
+        self._formatter_cols.clear()
+        if redraw:
+            self._redraw()
+
+    def update_cell(self, row_index: int, col_index: int | str, value: Any, notify: bool = True) -> None:
+        """Update a specific cell value in-place, updating sorting if relevant."""
+        c = self._style.resolve_col_index(col_index)
+        if c is None:
+            raise IndexError(f"Column '{col_index}' not found")
+        old_val, row_id = self._data_model.update_cell(row_index, c, value)
+
+        if self._data_model.sort_column == c:
+            self.sort_by(c, ascending=self._data_model.sort_ascending)
         else:
             self._redraw()
 
         if notify and self.on_cell_edit is not None:
-            self.on_cell_edit(row_id, col_index, old_val, value)
+            self.on_cell_edit(row_id, c, old_val, value)
 
     def update_row(self, display_row: int, values: list[Any], notify: bool = True) -> None:
         """Update an entire row in-place, updating sorting if relevant."""
@@ -1152,6 +1250,7 @@ class CTkTable(ctk.CTkFrame):
             "row_height": lambda: self._row_height,
             "header_height": lambda: self._header_height,
             "border_spacing": lambda: self._border_spacing,
+            "formatters": self._get_formatters_setting,
             "command": lambda: self.command,
         }
 
@@ -1168,6 +1267,7 @@ class CTkTable(ctk.CTkFrame):
             "show_columns": self._configure_show_columns,
             "column_widths": self._configure_column_widths,
             "editable": self._configure_editable,
+            "formatters": self._configure_formatters,
             "header_sortable": self._configure_header_sortable,
             "selection_target": self._selection_manager.set_target,
             "selection_mode": self._selection_manager.set_mode,
@@ -1179,6 +1279,26 @@ class CTkTable(ctk.CTkFrame):
             "on_cell_edit": self._configure_on_cell_edit,
             "command": self._configure_command,
         }
+
+    def _get_formatters_setting(
+        self,
+    ) -> Callable[[Any], Any] | dict[int | str, Callable[[Any], Any]] | None:
+        """Return active formatter rules."""
+        if not self._formatter_cols:
+            return self._formatter_default
+        rules: dict[int | str, Callable[[Any], Any]] = dict(self._formatter_cols)
+        if self._formatter_default is not None:
+            rules["default"] = self._formatter_default
+        return rules
+
+    def _configure_formatters(
+        self,
+        formatters: Callable[[Any], Any] | dict[int | str, Callable[[Any], Any]] | None,
+    ) -> None:
+        """Update column formatters and refresh the display."""
+        self._set_formatter_rules(formatters)
+        if not self._has_editable_cells():
+            self._cancel_edit()
 
     def _get_editable_setting(self) -> bool | dict[int | str, bool]:
         """Return the editable rules as one bool, or as a per-column dict with a 'default' entry."""

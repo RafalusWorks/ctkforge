@@ -258,6 +258,7 @@ class TableRenderer:
         col_font_objs: dict[int, tkfont.Font] | None = None,
         visible_cols: list[int] | None = None,
         resolve_color: Callable[[Any], str] | None = None,
+        format_cell: Callable[[int, Any], str] | None = None,
     ) -> None:
         """Render rows and cells within the visible viewport."""
         canvas.delete("all")
@@ -322,7 +323,9 @@ class TableRenderer:
                 cell_font = col_fonts[c] if (col_fonts and c in col_fonts) else body_font
                 cell_font_obj = col_font_objs[c] if (col_font_objs and c in col_font_objs) else body_font_obj
 
-                display_val = self.truncate_text(str(row_data[c]), max_text_w, cell_font_obj)
+                raw_val = row_data[c]
+                display_str = format_cell(c, raw_val) if format_cell is not None else str(raw_val)
+                display_val = self.truncate_text(display_str, max_text_w, cell_font_obj)
 
                 # Position text according to column alignment
                 align = column_alignments.get(c, "left") if column_alignments else "left"

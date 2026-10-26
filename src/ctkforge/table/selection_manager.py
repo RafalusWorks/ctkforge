@@ -4,6 +4,7 @@ Handles single, multiple, and range selections using mouse clicks and arrow keys
 Formats selected cells into tab-separated text ready for the clipboard.
 """
 
+from collections.abc import Callable
 from typing import Any, Literal
 
 from ctkforge.table.data_model import TableDataModel
@@ -280,15 +281,24 @@ class SelectionManager:
             elif self._anchor_row in new_row_map:
                 self._anchor_row = new_row_map[self._anchor_row]
 
-    def export_tsv(self, data_model: TableDataModel) -> str:
+    def export_tsv(
+        self,
+        data_model: TableDataModel,
+        format_cell: Callable[[int, Any], str] | None = None,
+    ) -> str:
         """Format selected rows or cells as tab-separated text for the clipboard."""
         lines: list[str] = []
+
+        def _format(c: int, val: Any) -> str:
+            if format_cell is not None:
+                return format_cell(c, val)
+            return str(val)
 
         if self._target == "row" and self._selected_rows:
             for display_row in sorted(self._selected_rows):
                 if display_row < data_model.row_count:
                     record = data_model.get_row(display_row)
-                    lines.append("\t".join(str(cell) for cell in record))
+                    lines.append("\t".join(_format(c, cell) for c, cell in enumerate(record)))
         elif self._selected_cells:
             grouped: dict[int, list[tuple[int, Any]]] = {}
             for display_row, col_idx in self._selected_cells:
@@ -301,12 +311,12 @@ class SelectionManager:
 
             for display_row in sorted(grouped.keys()):
                 cells = sorted(grouped[display_row], key=lambda x: x[0])
-                lines.append("\t".join(str(val) for _, val in cells))
+                lines.append("\t".join(_format(col_idx, val) for col_idx, val in cells))
         elif (
             self._focused_row is not None and self._focused_col is not None and self._focused_row < data_model.row_count
         ):
             try:
-                lines.append(str(data_model.get_cell(self._focused_row, self._focused_col)))
+                lines.append(_format(self._focused_col, data_model.get_cell(self._focused_row, self._focused_col)))
             except IndexError:
                 pass
 

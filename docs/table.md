@@ -5,7 +5,7 @@ A fast, modern data table widget for CustomTkinter with built-in sorting, select
 > For practical recipes and usage walkthroughs, see the [CTkTable User Guide](table_user_guide.md).  
 
 
-![CTkTable Preview](assets/table_preview.jpg)
+![CTkTable Preview](assets/table_preview.png)
 
 
 ---
@@ -108,7 +108,7 @@ app.mainloop()
 | `font` | `tuple \| CTkFont \| str \| dict \| None` | `None` | *(Scoped Attribute)* Font for table body cells (accepts a font tuple, `CTkFont`, or shortcuts `"bold"`, `"italic"`, `"bold italic"`). Accepts a single font (e.g. `"italic"`) or a dict for per-column overrides by index or header title (e.g. `{"default": ("Arial", 12), 1: "bold", "Name": "bold"}`). Defaults to active theme font (`CTkFont()`). |
 | `row_height` | `int` | `28` | Height of each body row in logical pixels (minimum 16). |
 | `row_color` | `str \| tuple[str, str] \| None` | `None` | Base row background color (single color or `(light, dark)` tuple). Defaults to container `fg_color` (uniform flat look). |
-| `alternate_row_color` | `str \| tuple[str, str] \| None` | `None` | Odd row background color for opt-in zebra striping (single color or `(light, dark)` tuple). Defaults to `None` (matches `row_color`, no striping). |
+| `alternate_row_color` | `str \| tuple[str, str] \| None` | `None` | Odd row background color for opt-in zebra striping (single color or `(light, dark)` tuple, e.g. `("gray92", "gray14")`). Defaults to `None` (matches `row_color`, no striping). |
 
 ### Selection & Interaction
 
@@ -121,12 +121,13 @@ app.mainloop()
 | `command` | `Callable \| None` | `None` | Callback fired whenever selection changes: `def on_select(items): ...` |
 | `copyable` | `bool` | `False` | Master toggle for interactive `Ctrl+C` clipboard copying. Disabled by default. |
 
-### In-Place Cell Editing
+### In-Place Cell Editing & Formatting
 
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `editable` | `bool \| dict[int \| str, bool]` | `False` | *(Scoped Attribute)* In-place cell editing control. Accepts a single boolean (e.g. `True`) or a dict for per-column overrides by index or header title (e.g. `{"default": True, 0: False, "ID": False}`). Defaults to `False`. If `"default"` is omitted in reconfigures, the active baseline is preserved. |
+| `editable` | `bool \| dict[int \| str, bool]` | `False` | *(Scoped Attribute)* In-place cell editing control. Accepts a single boolean (e.g. `True`) or a dict for per-column overrides by index or header title (e.g. `{"default": True, 0: False, "ID": False}`). Defaults to `False`. Columns with custom formatters are read-only by default unless explicitly configured in `editable`. If `"default"` is omitted in reconfigures, the active baseline is preserved. |
 | `on_cell_edit` | `Callable \| None` | `None` | Callback fired on edit commit: `def on_edit(actual_row, col, old_val, new_val): ...` |
+| `formatters` | `Callable \| dict[int \| str, Callable] \| None` | `None` | *(Scoped Attribute)* Visual presentation transform for cell data. Accepts a callable or a dict mapping column indices or header titles to formatter functions (e.g. `{"Progress": lambda v: f"[{'=' * (v // 10):<10}]"}`). Transforms display text and clipboard export while keeping raw dataset values intact for sorting and math. Formatted columns are read-only by default. |
 
 
 ---
@@ -230,6 +231,34 @@ color = table.get_cell_text_color(0, "Status")
 Removes all custom cell text colors across the entire table in a single operation.
 ```python
 table.clear_cell_text_colors()
+```
+
+#### `.get_formatted_cell(row_index: int, col_index: int | str) -> str`
+Returns the transformed visual text of a cell as rendered on screen (by visual display row and column index or header title).
+```python
+display_text = table.get_formatted_cell(0, "Progress")  # e.g. "[=====     ]"
+```
+
+#### `.set_column_formatter(column: int | str, formatter: Callable | None, redraw: bool = True) -> None`
+Assigns or removes a display formatter for a specific column. Pass `formatter=None` to revert the column to plain string rendering.
+```python
+table.set_column_formatter("Progress", lambda v: f"[{'=' * (v // 10):<10}]")
+table.set_column_formatter("Price", lambda v: f"${v:,.2f}")
+```
+
+> [!TIP]
+> For progress bars or text meters, use a monospace font like `("Consolas", 12)` so the bar length stays consistent across every row.
+
+#### `.get_column_formatter(column: int | str) -> Callable | None`
+Returns the active formatter function assigned to a column, or `None` if the column uses default string conversion.
+```python
+func = table.get_column_formatter("Progress")
+```
+
+#### `.clear_column_formatters(redraw: bool = True) -> None`
+Removes all custom column formatters across the table.
+```python
+table.clear_column_formatters()
 ```
 
 #### `.update_row(display_row: int, values: list[Any], notify: bool = True) -> None`

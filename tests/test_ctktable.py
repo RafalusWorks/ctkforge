@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import customtkinter as ctk
+import pytest
 
 from ctkforge.geometry import scale
 from ctkforge.table import CTkTable
@@ -1223,6 +1224,128 @@ def test_individual_cell_text_colors() -> None:
         root.destroy()
 
 
+def test_column_formatters() -> None:
+    """Test custom column presentation formatters, read-only defaults, auto-fit, and TSV export."""
+    root = ctk.CTk()
+    root.withdraw()
+    try:
+        headers = ["ID", "Progress", "Price", "EditableCol"]
+        values = [
+            [1, 50, 1200.5, "Can Edit"],
+            [2, 90, 49.0, "Can Edit 2"],
+            [3, 10, 350.0, "Can Edit 3"],
+        ]
+
+        # 1. Initialize with scoped dict formatters by header name and integer index
+        table = CTkTable(
+            root,
+            headers=headers,
+            values=values,
+            editable=True,
+            formatters={
+                "Progress": lambda v: f"[{'=' * (int(v) // 10):<10}]",
+                2: lambda v: f"${float(v):,.2f}",
+            },
+        )
+        root.update()
+
+        # Visual formatting check
+        assert table.get_formatted_cell(0, "Progress") == "[=====     ]"
+        assert table.get_formatted_cell(0, 1) == "[=====     ]"
+        assert table.get_formatted_cell(1, "Progress") == "[========= ]"
+        assert table.get_formatted_cell(0, "Price") == "$1,200.50"
+        assert table.get_formatted_cell(0, 2) == "$1,200.50"
+        assert table.get_formatted_cell(0, "ID") == "1"
+
+        # Raw data remains intact and supports header names or integer indices
+        assert table.get_cell(0, 1) == 50
+        assert table.get_cell(0, "Progress") == 50
+        assert table.get(0, 1) == 50
+        assert table.get(0, "Progress") == 50
+        assert table.get(column="Progress") == [50, 90, 10]
+        assert table.get_cell(0, 2) == 1200.5
+        assert table.get_cell(0, "Price") == 1200.5
+
+        # Update cell by header name
+        table.update_cell(0, "Progress", 55)
+        assert table.get_cell(0, "Progress") == 55
+        table.update_cell(0, 1, 50)
+        assert table.get_cell(0, 1) == 50
+
+        # Invalid column title raises IndexError
+        with pytest.raises(IndexError):
+            table.get_cell(0, "NonExistent")
+        with pytest.raises(IndexError):
+            table.get(column="NonExistent")
+        with pytest.raises(IndexError):
+            table.update_cell(0, "NonExistent", 99)
+
+        # 2. Formatted columns are read-only by default even when editable=True globally
+        assert not table._is_column_editable(1)
+        assert not table._is_column_editable(2)
+        assert table._is_column_editable(3)
+
+        table.start_editing(0, 1)
+        root.update()
+        assert not table.is_editing
+
+        table.start_editing(0, 3)
+        root.update()
+        assert table.is_editing
+        table._cancel_edit()
+        root.update()
+
+        # 3. Explicit column-level editable override takes precedence
+        table.configure(editable={"Progress": True})
+        assert table._is_column_editable(1)
+        table.start_editing(0, 1)
+        root.update()
+        assert table.is_editing
+        table._cancel_edit()
+        root.update()
+
+        # 4. Error tolerance: bad formatter does not crash, falls back to str(val)
+        def _faulty_formatter(_val: Any) -> str:
+            raise ValueError("Simulated formatter failure")
+
+        table.set_column_formatter("Progress", _faulty_formatter)
+        root.update()
+        assert table.get_formatted_cell(0, "Progress") == "50"
+
+        # 5. TSV export exports formatted values
+        table.set_column_formatter("Progress", lambda v: f"{v}%")
+        table.select_row(0)
+        tsv = table.copy_selection()
+        assert "50%\t$1,200.50" in tsv
+
+        # 6. Auto-fit columns with formatted text
+        table.auto_fit_columns()
+        root.update()
+        col_widths, _ = table._layout_mgr.calculate_geometry(root.winfo_width())
+        assert len(col_widths) == 4
+
+        # 7. Getter, Setter, Clear, and cget
+        assert table.get_column_formatter("Price") is not None
+        table.set_column_formatter(2, None)
+        assert table.get_column_formatter("Price") is None
+        assert table.get_formatted_cell(0, "Price") == "1200.5"
+
+        table.clear_column_formatters()
+        root.update()
+        assert table.get_formatted_cell(0, "Progress") == "50"
+        assert table.cget("formatters") is None
+
+        # 8. Dynamic configure
+        table.configure(formatters={"ID": lambda v: f"#{v:04d}"})
+        root.update()
+        assert table.get_formatted_cell(0, "ID") == "#0001"
+
+        print("test_column_formatters: PASSED", flush=True)
+    finally:
+        table.destroy()
+        root.destroy()
+
+
 if __name__ == "__main__":
     run_headless_tests()
     test_theme_color_pair_not_unpacked_as_columns()
@@ -1238,3 +1361,4 @@ if __name__ == "__main__":
     test_scroll_wheel_scrollbars_and_clamping()
     test_style_reconfigure_theme_defaults_and_appearance_mode()
     test_individual_cell_text_colors()
+    test_column_formatters()

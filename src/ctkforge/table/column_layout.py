@@ -41,6 +41,7 @@ class ColumnLayoutManager:
         create_text_measure_lookup: Callable[[], TextMeasureLookup],
         on_layout_changed: Callable[[], None],
         is_column_sortable: Callable[[int], bool] | None = None,
+        format_cell: Callable[[int, Any], str] | None = None,
     ) -> None:
         """Wire the manager to the table through plain callbacks.
 
@@ -56,6 +57,8 @@ class ColumnLayoutManager:
             resolve_col_index: Turns an index or header title into a logical column index.
             create_text_measure_lookup: Builds a fresh per-column text measuring lookup.
             on_layout_changed: Called after widths change so the table can redraw.
+            is_column_sortable: Checks whether a specific column header can be clicked to sort.
+            format_cell: Converts a cell value into its display string for auto-fit measuring.
         """
         self._widget = widget
         self._data_model = data_model
@@ -67,6 +70,7 @@ class ColumnLayoutManager:
         self._create_text_measure_lookup = create_text_measure_lookup
         self._on_layout_changed = on_layout_changed
         self._is_column_sortable = is_column_sortable
+        self._format_cell = format_cell
 
         self._column_widths: Any = column_widths
 
@@ -285,7 +289,11 @@ class ColumnLayoutManager:
         sample_values: list[str] = []
         for row in range(sample_rows):
             try:
-                sample_values.append(str(self._data_model.get_cell(row, col_index)))
+                raw_val = self._data_model.get_cell(row, col_index)
+                if self._format_cell is not None:
+                    sample_values.append(self._format_cell(col_index, raw_val))
+                else:
+                    sample_values.append(str(raw_val))
             except IndexError:
                 continue
         return sample_values

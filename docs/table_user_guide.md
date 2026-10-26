@@ -20,10 +20,11 @@ Comprehensive implementation guide for structuring, styling, configuring, and ma
    - [Selection Target & Modes](#selection-target--modes)
    - [Reading & Modifying Selection State](#reading--modifying-selection-state)
    - [Clipboard Integration](#clipboard-integration)
-4. [Sorting & In-Place Editing](#4-sorting--in-place-editing)
+4. [Sorting, In-Place Editing & Formatting](#4-sorting-in-place-editing--formatting)
    - [Interactive & Programmatic Sorting](#interactive--programmatic-sorting)
    - [Column Sort Keys](#column-sort-keys)
    - [In-Place Cell Editing](#in-place-cell-editing)
+   - [Column Formatters & Visual Presentation](#column-formatters--visual-presentation)
 5. [Runtime Data Operations](#5-runtime-data-operations)
    - [Inserting, Updating & Deleting Records](#inserting-updating--deleting-records)
    - [Managing Column Headers](#managing-column-headers)
@@ -122,7 +123,7 @@ table = CTkTable(
     app,
     ...,
     row_color=("#ffffff", "#1e1e1e"),  # Base row background
-    alternate_row_color=("#f9f9f9", "#262626"),  # Odd row background (zebra striping)
+    alternate_row_color=("gray92", "gray14"),  # Odd row background (zebra striping)
 )
 ```
 
@@ -387,6 +388,45 @@ By default, function keys (`F1`–`F12`) are left free for application-wide shor
 table.bind("<F2>", lambda _event: table.edit_focused_cell())
 ```
 
+### Column Formatters & Visual Presentation
+
+Column formatters transform how raw data is visually presented on screen and exported to clipboard without mutating the underlying dataset. This preserves accurate numeric sorting, filtering, and database synchronization.
+
+* **Scoped Attribute**: Accepts a single function or a dictionary keyed by column indices or header titles.
+* **Read-Only by Default**: Formatted columns automatically disable in-place cell editing to prevent visual strings from corrupting numeric or structured data. To override and allow editing, explicitly pass `editable={"Column": True}`.
+* **Auto-Fit Integration**: `auto_fit_columns()` measures the rendered output of formatters, ensuring cells never clip long formatted strings.
+* **Clipboard Sync**: `copy_selection()` exports the rendered formatted strings into TSV clipboard data.
+* **Error Tolerant**: If a formatter lambda throws an exception (e.g. unexpected `None`), the table gracefully falls back to `str(value)` instead of crashing.
+
+> [!TIP]
+> For progress bars or text meters, use a monospace font like `("Consolas", 12)` so the bar length stays consistent across every row.
+
+```python
+# Format progress integers as progress bars and numbers as currency:
+table = CTkTable(
+    app,
+    headers=["Task", "Progress", "Level", "Price"],
+    values=[
+        ["System Backup", 80, 15, 1299.5],
+        ["Database Sync", 30, 45, 49.0],
+    ],
+    formatters={
+        "Progress": lambda v: f"[{'=' * (int(v) // 10):<10}]",
+        "Level": lambda v: "Low" if v < 25 else "Medium" if v < 75 else "High",
+        "Price": lambda v: f"${v:,.2f}",
+    },
+)
+
+# Read raw vs. formatted cell values:
+raw_val = table.get(0, "Progress")          # Returns 80 (int)
+raw_cell = table.get_cell(0, 1)             # Returns 80 (int)
+disp_text = table.get_formatted_cell(0, 1)  # Returns "[========  ]" (str)
+
+# Dynamically change or clear formatters at runtime:
+table.set_column_formatter("Price", lambda v: f"€{v:,.2f}")
+table.clear_column_formatters()
+```
+
 ---
 
 ## 5. Runtime Data Operations
@@ -542,7 +582,7 @@ table = CTkTable(
     header_alignment="center",
     header_hover_color=("#3a7ebf", "#1f538d"),
     # Theming:
-    alternate_row_color=("#f9f9f9", "#242424"),
+    alternate_row_color=("gray92", "gray14"),
     # Selection & Interaction:
     selection_target="row",
     selection_mode="extended",
