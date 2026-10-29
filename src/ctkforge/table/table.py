@@ -472,9 +472,12 @@ class CTkTable(ctk.CTkFrame):
         self._header_canvas.configure(height=self._get_scaled_header_height())
         self._redraw()
 
-    def scroll_to(self, row: int | None = None, col: int | None = None) -> None:
+    def scroll_to(self, row: int | None = None, col: int | str | None = None) -> None:
         """Scroll the view automatically so a specific row or column is visible on screen."""
-        self._scroll_controller.scroll_to(row, col)
+        resolved_col = self._style.resolve_col_index(col) if col is not None else None
+        if row is None and col is not None and resolved_col is None:
+            return
+        self._scroll_controller.scroll_to(row, resolved_col)
 
     # -------------------------------------------------------------------------
     # In-Place Editing Lifecycle

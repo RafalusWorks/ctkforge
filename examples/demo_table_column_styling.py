@@ -7,6 +7,8 @@ Demonstrates:
   - Dynamic column visibility toggling (show_columns).
   - Individual cell text color overrides and dynamic toggle (Status highlights: Inactive/Probation in red, On Leave in orange).
   - Header hover highlights on sortable columns.
+  - Dynamic switching between row and cell selection targets.
+  - Dynamic switching between single and extended selection modes.
 
 Author: Rafalus
 Repository: https://github.com/RafalusWorks/ctkforge
@@ -23,7 +25,7 @@ ctk.set_default_color_theme("blue")
 
 app = ctk.CTk()
 app.title("CTkTable - Styling & Column Visibility Demo")
-app.geometry("1100x520")
+app.geometry("1100x580")
 app.minsize(850, 380)
 
 
@@ -45,6 +47,12 @@ values: list[list[Any]] = [
 ]
 
 
+def _format_progress(value: Any) -> str:
+    """Format numeric progress into a block-shaded bar with percentage."""
+    filled = min(10, max(0, int(value) // 10))
+    return f"[{'█' * filled}{'░' * (10 - filled)}] {int(value):>3}%"
+
+
 # Configure table with per-column styling using both header titles and column indices
 table = CTkTable(
     app,
@@ -60,7 +68,7 @@ table = CTkTable(
     },
     sort_key={"ID": "int", "Salary (£)": "str", "Progress": "int"},
     formatters={
-        "Progress": lambda v: f"[{'=' * (int(v) // 10):<10}] {int(v):>3}%",
+        "Progress": _format_progress,
     },
     justify={
         "default": "left",
@@ -145,7 +153,7 @@ def toggle_progress_visibility() -> None:
 def toggle_progress_format() -> None:
     """Toggle visual progress bar formatting on or off."""
     if progress_switch.get() == 1:
-        table.set_column_formatter("Progress", lambda v: f"[{'=' * (int(v) // 10):<10}] {int(v):>3}%")
+        table.set_column_formatter("Progress", _format_progress)
     else:
         table.set_column_formatter("Progress", None)
 
@@ -156,6 +164,20 @@ def toggle_alternate_row_color() -> None:
         table.configure(alternate_row_color=("gray92", "gray14"))
     else:
         table.configure(alternate_row_color=None)
+
+
+def toggle_selection_target() -> None:
+    """Toggle selection target between row and cell mode."""
+    target = "cell" if selection_target_switch.get() == 1 else "row"
+    selection_target_switch.configure(text=f"Selection: {target.capitalize()}")
+    table.configure(selection_target=target)
+
+
+def toggle_selection_mode() -> None:
+    """Toggle selection mode between single and extended."""
+    mode = "extended" if selection_mode_switch.get() == 1 else "single"
+    selection_mode_switch.configure(text=f"Mode: {mode.capitalize()}")
+    table.configure(selection_mode=mode)
 
 
 # Left sidebar controls
@@ -200,6 +222,20 @@ status_switch = ctk.CTkSwitch(
 )
 status_switch.pack(anchor="w", pady=(0, 15))
 status_switch.select()
+
+selection_target_switch = ctk.CTkSwitch(
+    controls_frame,
+    text="Selection: Row",
+    command=toggle_selection_target,
+)
+selection_target_switch.pack(anchor="w", pady=(0, 15))
+
+selection_mode_switch = ctk.CTkSwitch(
+    controls_frame,
+    text="Mode: Single",
+    command=toggle_selection_mode,
+)
+selection_mode_switch.pack(anchor="w", pady=(0, 15))
 
 # Apply initial highlights and pack table
 apply_status_highlights()

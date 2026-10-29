@@ -5,7 +5,7 @@ A fast, modern data table widget for CustomTkinter with built-in sorting, select
 > For practical recipes and usage walkthroughs, see the [CTkTable User Guide](table_user_guide.md).  
 
 
-![CTkTable Preview](assets/table_preview.png)
+![CTkTable Preview](assets/table_preview.webp)
 
 
 ---

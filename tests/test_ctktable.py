@@ -1078,6 +1078,16 @@ def test_scroll_wheel_scrollbars_and_clamping() -> None:
     assert scroller.scroll_y == 0.0
     table.scroll_to(row=99)
     assert scroller.scroll_y == scroller._get_max_scroll_y()
+    # scroll_to also resolves column header titles and integer indexes horizontally
+    table.scroll_to(col=0)
+    assert scroller.scroll_x == 0.0
+    table.scroll_to(col="F")
+    assert scroller.scroll_x == scroller._get_max_scroll_x() > 0.0
+    table.scroll_to(col="NonExistent")
+    assert scroller.scroll_x == scroller._get_max_scroll_x()
+    table.scroll_to(col=0)
+    assert scroller.scroll_x == 0.0
+
     table.configure(values=[[f"{r}-{c}" for c in range(6)] for r in range(50)])
     assert scroller.scroll_y == 0.0
 
@@ -1257,7 +1267,7 @@ def test_column_formatters() -> None:
         assert table.get_formatted_cell(0, 2) == "$1,200.50"
         assert table.get_formatted_cell(0, "ID") == "1"
 
-        # Raw data remains intact and supports header names or integer indices
+        # Raw data remains intact and supports header names or integer indexes
         assert table.get_cell(0, 1) == 50
         assert table.get_cell(0, "Progress") == 50
         assert table.get(0, 1) == 50

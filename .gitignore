@@ -24,3 +24,6 @@ build/
 # Others & Local-only
 .private/
 .agents/
+PROGRESS.md
+ctktable_ai_guide.md
+
